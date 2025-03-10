@@ -1,0 +1,310 @@
+---
+title: "Model Structure Brainstorming"
+author: "Vanessa Quintana"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Brainstorming Model Inputs
+- landings by pound and by value from 1950-2019 (overall abundance and economic value)
+- lobster landings by county for pound and value (ties abundance to reginal economic importance)
+- 
+
+## Input Data
+
+### DMR Landings for Species 1950-2019
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(forecast)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(tidyr)
+
+# Load historical data (1950-2019)
+landings <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/MaineDMR_Landings_Time_Series_Data_2025-03-10.csv",
+                     stringsAsFactors = FALSE)
+
+# Inspect data
+head(landings)
+str(landings)
+summary(landings)
+
+```
+
+### Lobster Landings by County in pounds and value
+```{r}
+# Load historical data (1950-2019)
+lobster_County <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/LobByCntyMoZone.csv",
+                     stringsAsFactors = FALSE)
+
+# Inspect data
+head(lobster_County)
+str(lobster_County)
+summary(lobster_County)
+```
+
+
+### NOAA Tides and Currents Water Levels Monthly Eastport, Portland, Bar Harbor, Maine.
+```{r}
+# Load Historical Water Level Data
+
+# Load Portland, ME Water Level Data
+portland <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Portland_Historic_Water_Levels.csv",
+                     stringsAsFactors = FALSE)
+
+# Inspect data
+head(portland)
+str(portland)
+summary(portland)
+
+# Load Portland, ME Water Level Data
+eastport <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Eastport_Historic_Water_Levels.csv",
+                     stringsAsFactors = FALSE)
+
+# Inspect data
+head(eastport)
+str(eastport)
+summary(eastport)
+
+# Load Portland, ME Water Level Data
+barharbor <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Bar_Harbor_Historic_Water_Levels.csv",
+                     stringsAsFactors = FALSE)
+
+# Inspect data
+head(barharbor)
+str(barharbor)
+summary(barharbor)
+
+# Function to clean and process water level data
+clean_water_levels <- function(df, station_name) {
+  df <- df %>%
+    mutate(Date = as.Date(Date, format="%Y/%m/%d"),
+           Year = year(Date)) %>%
+    select(Year, MSL..ft.) %>%
+    rename(Mean_Sea_Level_ft = MSL..ft.) %>%
+    group_by(Year) %>%
+    summarize(Mean_Sea_Level_ft = mean(Mean_Sea_Level_ft, na.rm = TRUE)) %>%
+    mutate(Station = station_name)
+  
+  return(df)
+}
+
+# Apply function to each station
+portland_clean <- clean_water_levels(portland, "Portland")
+eastport_clean <- clean_water_levels(eastport, "Eastport")
+barharbor_clean <- clean_water_levels(barharbor, "Bar Harbor")
+
+# Combine all stations
+water_levels <- bind_rows(portland_clean, eastport_clean, barharbor_clean)
+
+# Convert feet to meters (1 ft = 0.3048 m)
+water_levels <- water_levels %>%
+  mutate(Mean_Sea_Level_m = Mean_Sea_Level_ft * 0.3048)
+
+# Preview cleaned water levels
+head(water_levels)
+```
+
+### NOAA Oceanic Nino Index (ONI)
+```{r}
+# If the data is tab-separated, use:
+enso_data <- read.table("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/NOAA_ONI.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+
+# Convert to numeric
+enso_data$Anomaly <- as.numeric(enso_data$ANOM)
+
+# Categorize ENSO Phases
+enso_data <- enso_data %>%
+  mutate(ENSO_Phase = case_when(
+    Anomaly > 0.5 ~ "El Niño",
+    Anomaly < -0.5 ~ "La Niña",
+    TRUE ~ "Neutral"
+  ))
+
+# Inspect data
+head(enso_data)
+str(enso_data)
+summary(enso_data)
+
+```
+
+### NOAA Stock Assessment Data
+```{r}
+# Load Stock Assessment Data
+stocks <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Assessment_TimeSeries_Data.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Save original column names to extract species names
+original_colnames <- colnames(stocks)
+
+# Extract species names (before the first "..")
+species_names <- sub("\\..*", "", original_colnames)
+
+# Combine species names with row 1 and row 4 for new column names
+new_colnames <- paste(species_names, stocks[3, ], stocks[6, ], sep = "_")
+
+# Assign new column names
+colnames(stocks) <- new_colnames
+
+# Save the first column's name before removing it
+year_colname <- colnames(stocks)[1]
+
+# Remove the first column (year column temporarily)
+stocks <- stocks[, -1]  
+
+# Remove rows 1, 2, and 4 (including extra metadata rows)
+stocks <- stocks[-c(1:7), ]
+
+# Reassign the saved year column name to the first column
+colnames(stocks)[1] <- year_colname
+
+# Identify rows where all columns except the first are empty
+stocks <- stocks[-c(1:20), ]
+
+# Reset row indices
+rownames(stocks) <- NULL
+
+# Inspect data
+colnames(stocks)
+head(stocks, 10)
+str(stocks)
+summary(stocks)
+```
+
+### Monthly Mean Average Temperature
+```{r}
+# Load Temperature Data Weather.gov
+temp <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Portland_Monthly_Avg_Temp.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(temp)
+head(temp, 10)
+str(temp)
+summary(temp)
+
+# Load Precipitation Data
+precip <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Portland_Monthly_Avg_Precipitation.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(precip)
+head(precip, 10)
+str(precip)
+summary(precip)
+
+```
+
+
+## Preprocessing
+
+```{r}
+ggplot(water_levels, aes(x = Year, y = Mean_Sea_Level_m, color = Station)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +  # Linear trend
+  labs(title = "Historical Mean Sea Level Trends in Maine",
+       y = "Mean Sea Level (m)", x = "Year") +
+  theme_minimal()
+
+```
+```{r}
+# Fit linear regression model for each station
+linear_models <- water_levels %>%
+  group_by(Station) %>%
+  do(model = lm(Mean_Sea_Level_m ~ Year, data = .))
+
+# Extract slope (sea level rise rate) for each station
+slopes <- linear_models %>%
+  summarise(Station, Rate_m_per_year = coef(model)[2])
+
+print(slopes)
+
+```
+
+```{r}
+# Aggregate total landings per year for each species
+landings_yearly <- landings %>%
+  group_by(year) %>%
+  summarize(Total_Weight_kg = sum(total_weight, na.rm = TRUE)) %>%
+  rename(Year = year)
+
+# Merge with sea level data (averaging across stations)
+merged_data <- landings_yearly %>%
+  left_join(water_levels %>%
+              group_by(Year) %>%
+              summarize(Mean_Sea_Level_m = mean(Mean_Sea_Level_m, na.rm = TRUE)),
+            by = "Year")
+
+# Preview merged dataset
+head(merged_data)
+```
+
+```{r}
+cor_test <- cor.test(merged_data$Total_Weight_kg, merged_data$Mean_Sea_Level_m, use = "complete.obs")
+print(cor_test)
+```
+
+```{r}
+ggplot(merged_data, aes(x = Mean_Sea_Level_m, y = Total_Weight_kg)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Impact of Sea Level on Fisheries Landings",
+       x = "Mean Sea Level (m)", y = "Total Landings (kg)") +
+  theme_minimal()
+```
+
+```{r}
+# Ensure 'year' is numeric
+landings$year <- as.numeric(landings$year)
+
+# Aggregate landings by species and year
+species_landings_yearly <- landings %>%
+  group_by(year, species) %>%
+  summarize(Total_Weight_kg = sum(total_weight, na.rm = TRUE), .groups = "drop")
+
+# Convert water levels to numeric
+merged_data$Year <- as.numeric(merged_data$Year)
+
+# Define forecast years (2025-2050)
+future_years <- seq(2025, 2050, by = 1)
+
+# Predict baseline sea levels (historical trend)
+slr_model <- lm(Mean_Sea_Level_m ~ Year, data = merged_data)
+baseline_sea_levels <- predict(slr_model, newdata = data.frame(Year = future_years))
+
+# NASA SLR Scenarios
+low_slr <- baseline_sea_levels + (0.1 * ((future_years - 2025) / (2050 - 2025))^2)  # ~0.1m by 2050
+moderate_slr <- baseline_sea_levels + (0.2 * ((future_years - 2025) / (2050 - 2025))^2)  # ~0.2m by 2050
+high_slr <- baseline_sea_levels + (0.5 * ((future_years - 2025) / (2050 - 2025))^2)  # ~0.5m by 2050
+
+
+# Plot forecasted landings across SLR scenarios
+ggplot(forecast_results, aes(x = Year, group = Species)) +
+  geom_line(aes(y = Predicted_Landings, color = "Baseline Forecast")) +
+  geom_line(aes(y = Landings_LowSLR, color = "Low SLR")) +
+  geom_line(aes(y = Landings_ModerateSLR, color = "Moderate SLR")) +
+  geom_line(aes(y = Landings_HighSLR, color = "High SLR")) +
+  facet_wrap(~ Species, scales = "free_y") +
+  labs(title = "Forecasted Fisheries Landings under SLR Scenarios",
+       x = "Year", y = "Landings (kg)") +
+  scale_color_manual(values = c("Baseline Forecast" = "blue", 
+                                "Low SLR" = "green", 
+                                "Moderate SLR" = "orange", 
+                                "High SLR" = "red")) +
+  theme_minimal()
+```
+
+
+
+
+
+
+

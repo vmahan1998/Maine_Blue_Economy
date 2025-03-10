@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "R": {
     "Version": "4.4.1",
@@ -21,3 +22,28 @@
     }
   }
 }
+=======
+{
+  "R": {
+    "Version": "4.4.1",
+    "Repositories": [
+      {
+        "Name": "CRAN",
+        "URL": "https://packagemanager.posit.co/cran/latest"
+      }
+    ]
+  },
+  "Packages": {
+    "renv": {
+      "Package": "renv",
+      "Version": "1.0.10",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "utils"
+      ],
+      "Hash": "d0387d5687ec933dd7587efd4cfa2d85"
+    }
+  }
+}
+>>>>>>> e4c5bde8eea19f3ecf2b8510d26866c2127c8ed6

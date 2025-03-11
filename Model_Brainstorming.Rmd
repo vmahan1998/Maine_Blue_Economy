@@ -859,9 +859,12 @@ for (species_name in species_list) {
 ### Predict Lobster Landings by County
 
 ```{r}
-# Ensure the directory exists
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE)
+# Define base output directory
+base_output_dir <- "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/County_Plots"
+
+# Ensure the base directory exists
+if (!dir.exists(base_output_dir)) {
+  dir.create(base_output_dir, recursive = TRUE)
 }
 
 # Get unique counties
@@ -871,6 +874,14 @@ county_forecasts <- list()
 # Iterate through counties to generate forecasts
 for (county_name in county_list) {
   cat("\nProcessing County:", county_name, "\n")
+
+  # Define county-specific output directory
+  county_dir <- paste0(base_output_dir, "/", gsub(" ", "_", county_name))
+  
+  # Ensure county directory exists
+  if (!dir.exists(county_dir)) {
+    dir.create(county_dir, recursive = TRUE)
+  }
 
   # Filter data for the county
   county_data <- interpolated_data %>%
@@ -919,6 +930,9 @@ final_county_forecast <- bind_rows(county_forecasts)
 for (county_name in county_list) {
   county_data <- final_county_forecast %>% filter(County == county_name)
 
+  # Define county-specific output directory
+  county_dir <- paste0(base_output_dir, "/", gsub(" ", "_", county_name))
+
   # Plot for Lobster Pounds
   pounds_plot <- ggplot(county_data, aes(x = Year, y = Pred_Lobster_Pounds, color = Scenario)) +
     geom_line(size = 1) +
@@ -928,7 +942,7 @@ for (county_name in county_list) {
     theme(legend.position = "bottom")
 
   # Save Lobster Pounds plot
-  pounds_plot_filename <- paste0(output_dir, "/", gsub(" ", "_", county_name), "_Lobster_Pounds.png")
+  pounds_plot_filename <- paste0(county_dir, "/", gsub(" ", "_", county_name), "_Lobster_Pounds.png")
   ggsave(pounds_plot_filename, plot = pounds_plot, width = 8, height = 6, dpi = 300)
 
   # Plot for Lobster Value
@@ -940,14 +954,19 @@ for (county_name in county_list) {
     theme(legend.position = "bottom")
 
   # Save Lobster Value plot
-  value_plot_filename <- paste0(output_dir, "/", gsub(" ", "_", county_name), "_Lobster_Value.png")
+  value_plot_filename <- paste0(county_dir, "/", gsub(" ", "_", county_name), "_Lobster_Value.png")
   ggsave(value_plot_filename, plot = value_plot, width = 8, height = 6, dpi = 300)
 
-  cat("Saved plots for:", county_name, "\n")
+  # Save county-specific results as CSV
+  county_csv_filename <- paste0(county_dir, "/", gsub(" ", "_", county_name), "_Forecast_Results.csv")
+  write.csv(county_data, county_csv_filename, row.names = FALSE)
+
+  cat("Saved plots and results for:", county_name, "\n")
 }
 
-# Save final dataset
+# Save final dataset for all counties
 write.csv(final_county_forecast, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/county_forecast_results.csv", row.names = FALSE)
+
 
 ```
 

@@ -138,6 +138,29 @@ summary(enso_data)
 
 ```
 
+### NOAA North Atlantic Oscillation Index
+```{r}
+# If the data is tab-separated, use:
+NAO_data <- read.table("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/NAO_Index_NOAA.txt", header = TRUE, stringsAsFactors = FALSE)
+
+# Convert row names into an actual column
+NAO_data <- NAO_data %>%
+  rownames_to_column(var = "Year")  # Moves row names to a column called "Year"
+
+# Convert Year to numeric
+NAO_data$Year <- as.numeric(NAO_data$Year)
+
+NAO_long <- NAO_data %>%
+  pivot_longer(cols = -Year, names_to = "Month", values_to = "NAO_Index") %>%
+  drop_na
+
+# Inspect data
+head(NAO_data)
+str(NAO_data)
+summary(NAO_data)
+
+```
+
 ### NOAA Stock Assessment Data
 ```{r}
 # Load Stock Assessment Data
@@ -372,11 +395,98 @@ summary(merged_data)
 
 ```
 
+### ENSO Data
+
+```{r}
+
+# Ensure Year is an integer
+enso_data$Year <- as.integer(enso_data$YR)
+
+# Summarize by Year: Identify the dominant ENSO phase per year
+dominant_enso <- enso_data %>%
+  group_by(Year, ENSO_Phase) %>%
+  summarise(Count = n(), .groups = "drop") %>%  # Count occurrences of each phase per year
+  arrange(Year, desc(Count)) %>%  # Sort by Year and Count (descending)
+  distinct(Year, .keep_all = TRUE) %>%  # Keep only the most frequent ENSO phase per year
+  select(Year, ENSO_Phase)  # Keep only relevant columns
+
+# Merge dominant ENSO phase with merged_data
+merged_data <- merged_data %>%
+  left_join(dominant_enso, by = "Year")
+
+# Inspect results
+head(merged_data)
+```
+
+### Temperature and Precipitation Data
+
+```{r}
+# Convert Year column
+temp$Year <- as.integer(temp$Year)
+precip$Year <- as.integer(precip$Year)
+
+# Rename the 'Annual' column in the temperature dataset to 'Annual_Temp'
+temp <- temp %>%
+  rename(Annual_Temp = Annual)
+
+# Rename the 'Annual' column in the precipitation dataset to 'Annual_Precip'
+precip <- precip %>%
+  rename(Annual_Precip = Annual)
+
+# Merge temperature and precipitation data
+merged_data <- merged_data %>%
+  left_join(temp %>% select(Year, Annual_Temp), by = "Year") %>%
+  left_join(precip %>% select(Year, Annual_Precip), by = "Year")
+
+head(merged_data)
+summary(merged_data)
+```
+
+### North Atlantic Oscillation Index
+```{r}
+# Compute annual mean NAO index
+NAO_annual <- NAO_long %>%
+  group_by(Year) %>%
+  summarize(Annual_NAO = mean(NAO_Index, na.rm = TRUE))  # Average across months
+
+# Merge NAO data with existing merged_data
+merged_data <- merged_data %>%
+  left_join(NAO_annual, by = "Year")  # Match based on Year column
+
+# Check merged dataset
+head(merged_data)
+```
+
+### Interpolate Missing Values
+
+```{r}
+# Interpolate NA Values
+head(merged_data,10)
+
+# Function to interpolate numeric columns
+interpolate_numeric <- function(x) {
+  if (is.numeric(x)) {
+    return(na.approx(x, rule = 2))  # Linear interpolation
+  } else {
+    return(x)  # Return as is if not numeric
+  }
+}
+
+# Apply interpolation to numeric columns
+interpolated_data <- merged_data %>%
+  mutate(across(where(is.numeric), interpolate_numeric))
+
+# Fill missing categorical values using last observation carried forward
+interpolated_data <- interpolated_data %>%
+  mutate(across(where(is.character), ~na.locf(.x, na.rm = FALSE)))
+
+```
+
 ### Stock Assessment
 
 ```{r}
 
-species_list1 <- unique(merged_data$species)
+species_list1 <- unique(interpolated_data$species)
 print(species_list1)
 species_list2 <- unique(stocks_total_catch$species)
 print(species_list2)
@@ -427,82 +537,11 @@ stocks_total_catch <- stocks_total_catch %>% select(-Cleaned_Species, -Matched_S
 # Verify changes
 head(stocks_total_catch)
 
-merged_data <- merged_data %>%
+interpolated_data <- interpolated_data %>%
   left_join(stocks_total_catch, by = c("Year", "species"))
 
 # Check for missing matches
-summary(merged_data)
-
-```
-
-### ENSO Data
-
-```{r}
-
-# Ensure Year is an integer
-enso_data$Year <- as.integer(enso_data$YR)
-
-# Summarize by Year: Identify the dominant ENSO phase per year
-dominant_enso <- enso_data %>%
-  group_by(Year, ENSO_Phase) %>%
-  summarise(Count = n(), .groups = "drop") %>%  # Count occurrences of each phase per year
-  arrange(Year, desc(Count)) %>%  # Sort by Year and Count (descending)
-  distinct(Year, .keep_all = TRUE) %>%  # Keep only the most frequent ENSO phase per year
-  select(Year, ENSO_Phase)  # Keep only relevant columns
-
-# Merge dominant ENSO phase with merged_data
-merged_data <- merged_data %>%
-  left_join(dominant_enso, by = "Year")
-
-# Inspect results
-head(merged_data)
-```
-
-### Temperature and Precipitation Data
-
-```{r}
-# Convert Year column
-temp$Year <- as.integer(temp$Year)
-precip$Year <- as.integer(precip$Year)
-
-# Rename the 'Annual' column in the temperature dataset to 'Annual_Temp'
-temp <- temp %>%
-  rename(Annual_Temp = Annual)
-
-# Rename the 'Annual' column in the precipitation dataset to 'Annual_Precip'
-precip <- precip %>%
-  rename(Annual_Precip = Annual)
-
-# Merge temperature and precipitation data
-merged_data <- merged_data %>%
-  left_join(temp %>% select(Year, Annual_Temp), by = "Year") %>%
-  left_join(precip %>% select(Year, Annual_Precip), by = "Year")
-
-head(merged_data)
-summary(merged_data)
-```
-### Interpolate Missing Values
-
-```{r}
-# Interpolate NA Values
-head(merged_data,10)
-
-# Function to interpolate numeric columns
-interpolate_numeric <- function(x) {
-  if (is.numeric(x)) {
-    return(na.approx(x, rule = 2))  # Linear interpolation
-  } else {
-    return(x)  # Return as is if not numeric
-  }
-}
-
-# Apply interpolation to numeric columns
-interpolated_data <- merged_data %>%
-  mutate(across(where(is.numeric), interpolate_numeric))
-
-# Fill missing categorical values using last observation carried forward
-interpolated_data <- interpolated_data %>%
-  mutate(across(where(is.character), ~na.locf(.x, na.rm = FALSE)))
+summary(interpolated_data)
 
 ```
 
@@ -510,17 +549,17 @@ interpolated_data <- interpolated_data %>%
 
 ### Sea-Level Rise Scenarios
 ```{r}
-# Define forecast years (2025-2050)
+# Set forecast years (2025-2100)
 future_years <- seq(2020, 2100, by = 1)
 
 # Predict baseline sea levels (historical trend)
 slr_model <- lm(Mean_Sea_Level_m ~ Year, data = interpolated_data)
 baseline_sea_levels <- predict(slr_model, newdata = data.frame(Year = future_years))
 
-# NASA SLR Scenarios
-low_slr <- baseline_sea_levels + (0.5 * ((future_years - 2020) / (2100 - 2020))^2)  # ~0.1m by 2100
-moderate_slr <- baseline_sea_levels + (1.0 * ((future_years - 2020) / (2100 - 2020))^2)  # ~0.2m by 2100
-high_slr <- baseline_sea_levels + (1.5 * ((future_years - 2020) / (2100 - 2020))^2)  # ~0.5m by 2100
+# IPCC AR6-Based Sea Level Rise Adjustments
+low_slr <- baseline_sea_levels + (0.44 * ((future_years - 2025) / (2100 - 2025))^2)  # SSP1-2.6 (~0.44m by 2100)
+moderate_slr <- baseline_sea_levels + (0.60 * ((future_years - 2025) / (2100 - 2025))^2)  # SSP2-4.5 (~0.60m by 2100)
+high_slr <- baseline_sea_levels + (1.0 * ((future_years - 2025) / (2100 - 2025))^2)  # SSP5-8.5 (~1.0m by 2100)
 
 # Create DataFrame for SLR Scenarios
 slr_data <- data.frame(
@@ -543,9 +582,11 @@ ggplot(slr_data, aes(x = Year, y = SLR, color = Scenario)) +
 # Generate warming scenarios (based on temperature trends)
 temp_model <- lm(Annual_Temp ~ Year, data = interpolated_data)
 baseline_temp <- predict(temp_model, newdata = data.frame(Year = future_years))
-low_temp <- baseline_temp + 0.5  # Low warming
-moderate_temp <- baseline_temp + 1.0  # Moderate warming
-high_temp <- baseline_temp + 2.0  # High warming
+
+# IPCC AR6-Based Temperature Adjustments
+low_temp <- baseline_temp + (1.8 * ((future_years - 2025) / (2100 - 2025)))  # SSP1-2.6 (~1.8°C increase by 2100)
+moderate_temp <- baseline_temp + (2.7 * ((future_years - 2025) / (2100 - 2025)))  # SSP2-4.5 (~2.7°C increase by 2100)
+high_temp <- baseline_temp + (4.4 * ((future_years - 2025) / (2100 - 2025)))  # SSP5-8.5 (~4.4°C increase by 2100)
 
 # Create DataFrame for Temperature Scenarios
 temp_data <- data.frame(
@@ -614,126 +655,173 @@ head(Total_Catch_Scenario)
 
 ### All Scenarios
 ```{r}
-# Create scenario-specific datasets
+# Generate a simple trend model for Annual_NAO
+nao_model <- lm(Annual_NAO ~ Year, data = interpolated_data)
+
+# Predict baseline NAO for future years
+future_annual_nao <- predict(nao_model, newdata = data.frame(Year = future_years))
+
+# Create scenario-specific datasets with NAO included
 future_scenarios <- list(
   # Baseline Scenario
-  "Baseline" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                          ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                          Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                          Annual_Temp = baseline_temp),
+  "Baseline" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
   
   # Sea Level Rise Scenarios
-  "SLR_Low" = data.frame(Year = future_years, Mean_Sea_Level_m = low_slr, 
-                         ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                         Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                         Annual_Temp = baseline_temp),
+  "SLR_Low" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = low_slr, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
   
-  "SLR_Moderate" = data.frame(Year = future_years, Mean_Sea_Level_m = moderate_slr, 
-                              ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                              Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                              Annual_Temp = baseline_temp),
+  "SLR_Moderate" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = moderate_slr, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
   
-  "SLR_High" = data.frame(Year = future_years, Mean_Sea_Level_m = high_slr, 
-                          ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                          Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                          Annual_Temp = baseline_temp),
-  
-  # Temperature Scenarios
-  "Temp_Low" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                          ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                          Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                          Annual_Temp = low_temp),
-  
-  "Temp_Moderate" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                               ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                               Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                               Annual_Temp = moderate_temp),
-  
-  "Temp_High" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                           ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                           Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                           Annual_Temp = high_temp),
-  
-  # Combined SLR + Temp Scenarios
-  "SLR_Temp_Low" = data.frame(Year = future_years, Mean_Sea_Level_m = low_slr, 
-                              ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                              Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                              Annual_Temp = low_temp),
-  
-  "SLR_Temp_Moderate" = data.frame(Year = future_years, Mean_Sea_Level_m = moderate_slr, 
-                                   ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                                   Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                                   Annual_Temp = moderate_temp),
-  
-  "SLR_Temp_High" = data.frame(Year = future_years, Mean_Sea_Level_m = high_slr, 
-                               ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                               Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                               Annual_Temp = high_temp),
-  
-  # ENSO Variability Scenarios
-  "ENSO_2yr" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                          ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                          Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                          Annual_Temp = baseline_temp),
-  
-  "ENSO_3yr" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                          ENSO_Phase = enso_scenarios$ENSO_3yr, 
-                          Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                          Annual_Temp = baseline_temp),
-  
-  "ENSO_5yr" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                          ENSO_Phase = enso_scenarios$ENSO_5yr, 
-                          Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                          Annual_Temp = baseline_temp),
-  
-  "ENSO_7yr" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                          ENSO_Phase = enso_scenarios$ENSO_7yr, 
-                          Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-                          Annual_Temp = baseline_temp),
-  
-  # Fishing Policy Changes
-  "Fishing_Conservative" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                                      ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                                      Catch_Total = Total_Catch_Scenario$Catch_Conservative, 
-                                      Annual_Temp = baseline_temp),
-  
-  "Fishing_Moderate" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                                  ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                                  Catch_Total = Total_Catch_Scenario$Catch_Moderate, 
-                                  Annual_Temp = baseline_temp),
-  
-  "Fishing_Aggressive" = data.frame(Year = future_years, Mean_Sea_Level_m = baseline_sea_levels, 
-                                    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-                                    Catch_Total = Total_Catch_Scenario$Catch_Aggressive, 
-                                    Annual_Temp = baseline_temp),
-  
-  # Combined SLR + ENSO + Temperature + Fishing Scenarios
-  "SLR_High_Temp_High_ENSO_2yr_Fishing_Aggressive" = data.frame(
+  "SLR_High" = data.frame(
     Year = future_years, 
     Mean_Sea_Level_m = high_slr, 
     ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Aggressive, 
-    Annual_Temp = high_temp
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
   ),
-
-  "SLR_Moderate_Temp_Moderate_ENSO_3yr_Fishing_Moderate" = data.frame(
+  
+  # Temperature Scenarios
+  "Temp_Low" = data.frame(
     Year = future_years, 
-    Mean_Sea_Level_m = moderate_slr, 
-    ENSO_Phase = enso_scenarios$ENSO_3yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Moderate, 
-    Annual_Temp = moderate_temp
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = low_temp,
+    Annual_NAO = future_annual_nao
   ),
-
-  "SLR_Low_Temp_Low_ENSO_5yr_Fishing_Conservative" = data.frame(
+  
+  "Temp_Moderate" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = moderate_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  "Temp_High" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = high_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  # Combined SLR + Temp Scenarios
+  "SLR_Temp_Low" = data.frame(
     Year = future_years, 
     Mean_Sea_Level_m = low_slr, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = low_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  "SLR_Temp_Moderate" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = moderate_slr, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = moderate_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  "SLR_Temp_High" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = high_slr, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = high_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  # ENSO Variability Scenarios
+  "ENSO_2yr" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  "ENSO_3yr" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_3yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  "ENSO_5yr" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
     ENSO_Phase = enso_scenarios$ENSO_5yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  "ENSO_7yr" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_7yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  # Fishing Policy Changes
+  "Fishing_Conservative" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
     Catch_Total = Total_Catch_Scenario$Catch_Conservative, 
-    Annual_Temp = low_temp
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  "Fishing_Moderate" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Moderate, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
+  ),
+  
+  "Fishing_Aggressive" = data.frame(
+    Year = future_years, 
+    Mean_Sea_Level_m = baseline_sea_levels, 
+    ENSO_Phase = enso_scenarios$ENSO_2yr, 
+    Catch_Total = Total_Catch_Scenario$Catch_Aggressive, 
+    Annual_Temp = baseline_temp,
+    Annual_NAO = future_annual_nao
   )
 )
-
-
 ```
 
 
@@ -753,7 +841,7 @@ for (species_name in species_list) {
   # Filter data for species and historical period (<= 2019)
   species_data <- interpolated_data %>%
     filter(species == species_name, Year <= 2019) %>%
-    select(Year, Total_Weight_kg, Total_Value, Mean_Sea_Level_m, Annual_Temp, ENSO_Phase) %>%
+    select(Year, Total_Weight_kg, Total_Value, Mean_Sea_Level_m, Annual_Temp, ENSO_Phase, Annual_NAO) %>%
     arrange(Year)
 
   # Skip species with no data
@@ -761,7 +849,7 @@ for (species_name in species_list) {
 
   # Fill missing values using interpolation
   species_data <- species_data %>%
-    mutate(across(c(Total_Weight_kg, Total_Value, Mean_Sea_Level_m, Annual_Temp), ~ zoo::na.approx(., na.rm = FALSE, rule = 2)))
+    mutate(across(c(Total_Weight_kg, Total_Value, Mean_Sea_Level_m, Annual_Temp, Annual_NAO), ~ zoo::na.approx(., na.rm = FALSE, rule = 2)))
 
   # Convert ENSO_Phase to numeric categories (-1 = La Niña, 0 = Neutral, 1 = El Niño)
   species_data$ENSO_Phase_Num <- case_when(
@@ -775,9 +863,9 @@ for (species_name in species_list) {
   ts_weight <- ts(species_data$Total_Weight_kg, start = min(species_data$Year), frequency = 1)
   ts_value <- ts(species_data$Total_Value, start = min(species_data$Year), frequency = 1)
 
-  # Fit ARIMA models with external regressors (SLR, Temp, ENSO)
-  fit_weight <- auto.arima(ts_weight, xreg = cbind(species_data$Mean_Sea_Level_m, species_data$Annual_Temp, species_data$ENSO_Phase_Num), seasonal = TRUE)
-  fit_value <- auto.arima(ts_value, xreg = cbind(species_data$Mean_Sea_Level_m, species_data$Annual_Temp, species_data$ENSO_Phase_Num), seasonal = TRUE)
+  # Fit ARIMA models with external regressors (SLR, Temp, ENSO, NAO)
+  fit_weight <- auto.arima(ts_weight, xreg = cbind(species_data$Mean_Sea_Level_m, species_data$Annual_Temp, species_data$ENSO_Phase_Num, species_data$Annual_NAO), seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
+  fit_value <- auto.arima(ts_value, xreg = cbind(species_data$Mean_Sea_Level_m, species_data$Annual_Temp, species_data$ENSO_Phase_Num, species_data$Annual_NAO), seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
 
   # Forecast for all future scenarios
   for (scenario_name in names(future_scenarios)) {
@@ -792,8 +880,8 @@ for (species_name in species_list) {
     )
 
     # Forecast future landings and value
-    forecast_weight <- forecast(fit_weight, xreg = cbind(scenario_data$Mean_Sea_Level_m, scenario_data$Annual_Temp, scenario_data$ENSO_Phase_Num), h = length(future_years))
-    forecast_value <- forecast(fit_value, xreg = cbind(scenario_data$Mean_Sea_Level_m, scenario_data$Annual_Temp, scenario_data$ENSO_Phase_Num), h = length(future_years))
+    forecast_weight <- forecast(fit_weight, xreg = cbind(scenario_data$Mean_Sea_Level_m, scenario_data$Annual_Temp, scenario_data$ENSO_Phase_Num, scenario_data$Annual_NAO), h = length(future_years))
+    forecast_value <- forecast(fit_value, xreg = cbind(scenario_data$Mean_Sea_Level_m, scenario_data$Annual_Temp, scenario_data$ENSO_Phase_Num, scenario_data$Annual_NAO), h = length(future_years))
 
     # Store results
     species_forecasts[[paste(species_name, scenario_name, sep = "_")]] <- data.frame(
@@ -901,8 +989,8 @@ for (county_name in county_list) {
   ts_lobster_value <- ts(county_data$Lobster_Value, start = min(county_data$Year), frequency = 1)
 
   # Fit ARIMA models with external regressors
-  fit_lobster_pounds <- auto.arima(ts_lobster_pounds, xreg = cbind(county_data$Mean_Sea_Level_m, county_data$Annual_Temp), seasonal = TRUE)
-  fit_lobster_value <- auto.arima(ts_lobster_value, xreg = cbind(county_data$Mean_Sea_Level_m, county_data$Annual_Temp), seasonal = TRUE)
+  fit_lobster_pounds <- auto.arima(ts_lobster_pounds, xreg = cbind(county_data$Mean_Sea_Level_m, county_data$Annual_Temp), seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
+  fit_lobster_value <- auto.arima(ts_lobster_value, xreg = cbind(county_data$Mean_Sea_Level_m, county_data$Annual_Temp), seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
 
   # Forecast for all future scenarios
   for (scenario_name in names(future_scenarios)) {
@@ -997,25 +1085,39 @@ lobster_validation$Year <- as.numeric(lobster_validation$Year)
 lobster_validation$Lobster_Pounds <- as.numeric(lobster_validation$Pounds)
 lobster_validation$Lobster_Value <- as.numeric(lobster_validation$Value)
 
-# Merge forecasted data with actual validation data
-comparison_data <- final_county_forecast %>%
-  filter(Year >= 2020 & Year <= 2024) %>%
-  left_join(lobster_validation, by = c("Year", "County"))
+# Filter to keep only the baseline scenario
+# Step 1: Filter baseline scenario & relevant years
+final_county_forecast_baseline <- final_county_forecast %>%
+  filter(Scenario == "Baseline", Year >= 2020 & Year <= 2024) %>%
+  select(Year, County, Pred_Lobster_Pounds, Pred_Lobster_Value)
+
+# Step 2: Clean & Standardize County Names to Avoid Mismatches
+final_county_forecast_baseline <- final_county_forecast_baseline %>%
+  mutate(County = str_trim(County) %>% str_to_title())
+
+lobster_validation <- lobster_validation %>%
+  mutate(County = str_trim(County) %>% str_to_title())
+
+# Step 3: Perform an Inner Join to Keep Only Matching Records
+comparison_data <- inner_join(final_county_forecast_baseline, lobster_validation, by = c("Year", "County"))
+
+# Check for unmatched records
+unmatched_forecast <- setdiff(final_county_forecast_baseline$County, lobster_validation$County)
+unmatched_validation <- setdiff(lobster_validation$County, final_county_forecast_baseline$County)
+
+# Print any mismatches (if empty, then all counties matched correctly)
+print(unmatched_forecast)  # Counties in forecast but not in validation
+print(unmatched_validation)  # Counties in validation but not in forecast
 
 # Check if any rows still contain NA values
 summary(comparison_data)
 
-# Convert to long format for easier ggplot handling
-comparison_pounds_long <- comparison_data %>%
-  pivot_longer(cols = c(Pred_Lobster_Pounds, Lobster_Pounds), 
-               names_to = "Type", values_to = "Lobster_Pounds") %>%
-  mutate(Type = ifelse(Type == "Lobster_Pounds", "Observed", Scenario))
+# Ensure the merged data keeps both predicted and observed values as separate columns
+comparison_pounds_data <- comparison_data %>%
+  select(Year, County, Pred_Lobster_Pounds, Lobster_Pounds)
 
-# Same for Lobster Value
-comparison_value_long <- comparison_data %>%
-  pivot_longer(cols = c(Pred_Lobster_Value, Lobster_Value), 
-               names_to = "Type", values_to = "Lobster_Value") %>%
-  mutate(Type = ifelse(Type == "Lobster_Value", "Observed", Scenario))
+comparison_value_data <- comparison_data %>%
+  select(Year, County, Pred_Lobster_Value, Lobster_Value)
 
 # Unique counties
 counties <- unique(comparison_pounds_long$County)

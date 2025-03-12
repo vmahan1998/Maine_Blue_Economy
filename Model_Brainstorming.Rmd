@@ -24,7 +24,6 @@ library(dplyr)
 library(lubridate)
 library(tidyr)
 library(caret)
-library(randomForest)
 library(tseries)
 library(Metrics)
 library(zoo)
@@ -39,6 +38,8 @@ head(landings)
 str(landings)
 summary(landings)
 
+# Market Price per Kilogram
+landings$market_price_per_Kg <- landings$total_value / landings$total_weight
 ```
 
 ### Lobster Landings by County in pounds and value
@@ -261,29 +262,229 @@ summary(stocks_total_catch)
 
 ### Monthly Mean Average Temperature
 ```{r}
+## Portland
 # Load Temperature Data Weather.gov
-temp <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Portland_Monthly_Avg_Temp.csv",
+portland_temp <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Portland_Monthly_Avg_Temp.csv",
                    stringsAsFactors = FALSE, 
                    check.names = TRUE, 
                    skip = 0)  # Load all rows initially
 
 # Inspect data
-colnames(temp)
-head(temp, 10)
-str(temp)
-summary(temp)
+colnames(portland_temp)
+head(portland_temp, 10)
+str(portland_temp)
+summary(portland_temp)
 
 # Load Precipitation Data
-precip <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Portland_Monthly_Avg_Precipitation.csv",
+Portland_precip <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Portland_Monthly_Avg_Precipitation.csv",
                    stringsAsFactors = FALSE, 
                    check.names = TRUE, 
                    skip = 0)  # Load all rows initially
 
 # Inspect data
-colnames(precip)
-head(precip, 10)
-str(precip)
-summary(precip)
+colnames(Portland_precip)
+head(Portland_precip, 10)
+str(Portland_precip)
+summary(Portland_precip)
+
+## Belfast
+# Load Temperature Data Weather.gov
+belfast_temp <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Belfast_Monthly_Avg_Temp.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(belfast_temp)
+head(belfast_temp, 10)
+str(belfast_temp)
+summary(belfast_temp)
+
+# Load Precipitation Data
+belfast_precip <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Belfast_Monthly_Avg_Precipitation.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(belfast_precip)
+head(belfast_precip, 10)
+str(belfast_precip)
+summary(belfast_precip)
+
+## Moosehead
+# Load Temperature Data Weather.gov
+moosehead_temp <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Moosehead_Monthly_Avg_Temp.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(moosehead_temp)
+head(moosehead_temp, 10)
+str(moosehead_temp)
+summary(moosehead_temp)
+
+# Load Precipitation Data
+moosehead_precip <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Moosehead_Monthly_Avg_Precipitation.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(moosehead_precip)
+head(moosehead_precip, 10)
+str(moosehead_precip)
+summary(moosehead_precip)
+
+## Gardiner
+# Load Temperature Data Weather.gov
+gardiner_temp <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Gardiner_Monthly_Avg_Temp.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(gardiner_temp)
+head(gardiner_temp, 10)
+str(gardiner_temp)
+summary(gardiner_temp)
+
+# Load Precipitation Data
+gardiner_precip <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Gardiner_Monthly_Avg_Precipitation.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(gardiner_precip)
+head(gardiner_precip, 10)
+str(gardiner_precip)
+summary(gardiner_precip)
+
+## Augusta
+# Load Temperature Data Weather.gov
+augusta_temp <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Augusta_Monthly_Avg_Temp.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(augusta_temp)
+head(augusta_temp, 10)
+str(augusta_temp)
+summary(augusta_temp)
+
+# Load Precipitation Data
+augusta_precip <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Augusta_Monthly_Avg_Precipitation.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+# Inspect data
+colnames(augusta_precip)
+head(augusta_precip, 10)
+str(augusta_precip)
+summary(augusta_precip)
+```
+
+### Maine Population Levels
+```{r}
+# Read in state-level population data
+state_population <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/State_Population.csv",
+                             stringsAsFactors = FALSE, check.names = TRUE)
+
+# Convert wide format to long format
+state_population_long <- state_population %>%
+  pivot_longer(cols = starts_with("A00AA"), names_to = "Year", values_to = "Population") %>%
+  mutate(Year = as.numeric(gsub("A00AA", "", Year))) %>%
+  filter(Year >= 1950 & Year <= 2020)  # Keep only relevant years
+
+# Interpolate missing years
+state_population_interp <- state_population_long %>%
+  complete(Year = full_seq(Year, 1)) %>%  # Fill missing years
+  arrange(Year) %>%
+  mutate(Population = zoo::na.approx(Population, na.rm = FALSE, rule = 2))  # Linear interpolation
+
+# Read in county-level population data
+county_population <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/County_Populations.csv",
+                              stringsAsFactors = FALSE, check.names = TRUE)
+
+# Convert wide format to long format
+county_population_long <- county_population %>%
+  pivot_longer(cols = starts_with("A00AA"), names_to = "Year", values_to = "Population") %>%
+  mutate(Year = as.numeric(gsub("A00AA", "", Year))) %>%
+  filter(Year >= 1950 & Year <= 2020)  # Keep only relevant years
+
+# Interpolate missing years
+county_population_interp <- county_population_long %>%
+  complete(Year = full_seq(Year, 1), nesting(COUNTY)) %>%  # Fill missing years for each county
+  arrange(COUNTY, Year) %>%
+  group_by(COUNTY) %>%
+  mutate(Population = zoo::na.approx(Population, na.rm = FALSE, rule = 2))  # Linear interpolation
+
+# Save results
+write.csv(state_population_interp, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/State_Population_Annual.csv", row.names = FALSE)
+write.csv(county_population_interp, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/County_Population_Annual.csv", row.names = FALSE)
+
+# Preview output
+head(state_population_interp)
+head(county_population_interp)
+
+# Subset county-level population data
+county_population_subset <- county_population_interp %>%
+  select(Year, COUNTY, Population)
+
+# Subset state-level population data
+state_population_subset <- state_population_interp %>%
+  select(Year, Population)
+
+# Save the new subsets as CSV files
+write.csv(county_population_subset, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/County_Population_Subset.csv", row.names = FALSE)
+write.csv(state_population_subset, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/State_Population_Subset.csv", row.names = FALSE)
+
+# Preview the subsets
+head(county_population_subset)
+head(state_population_subset)
+```
+
+### Historical GDP
+
+```{r}
+GDP <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Historical_GDP.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+head(GDP)
+
+# Extract only the year from the Date column
+gdp_data_cleaned <- GDP %>%
+  mutate(Year = year(mdy(Date))) %>%  # Convert date and extract year
+  filter(Year >= 1950 & Year <= 2020) %>%  # Keep only years 1950-2020
+  select(Year, GDP..Billions.of.US..., Per.Capita..US..., Annual...Change)  # Keep relevant columns
+
+# Save the cleaned dataset
+write.csv(gdp_data_cleaned, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/GDP_Data_Cleaned.csv", row.names = FALSE)
+
+# Preview the cleaned data
+head(gdp_data_cleaned)
+```
+
+### Per Capita Consumption
+
+```{r}
+consumption <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Per_Captia_Consumption.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+head(consumption)
+```
+
+### Fisheries Exports
+
+```{r}
 
 ```
 
@@ -323,7 +524,8 @@ print(slopes)
 landings_yearly <- landings %>%
   group_by(year, species) %>%
   summarize(Total_Weight_kg = sum(total_weight, na.rm = TRUE),
-            Total_Value = sum(total_value, na.rm = TRUE)) %>%
+            Total_Value = sum(total_value, na.rm = TRUE),
+            Avg_Market_Price = mean(market_price_per_Kg)) %>%
   ungroup()  # Ensure no lingering groupings
 
 # Inspect results
@@ -421,22 +623,98 @@ head(merged_data)
 ### Temperature and Precipitation Data
 
 ```{r}
+## Portland
 # Convert Year column
-temp$Year <- as.integer(temp$Year)
-precip$Year <- as.integer(precip$Year)
+portland_temp$Year <- as.integer(portland_temp$Year)
+Portland_precip$Year <- as.integer(Portland_precip$Year)
 
 # Rename the 'Annual' column in the temperature dataset to 'Annual_Temp'
-temp <- temp %>%
-  rename(Annual_Temp = Annual)
+portland_temp <- portland_temp %>%
+  rename(Portland_Annual_Temp = Annual)
 
 # Rename the 'Annual' column in the precipitation dataset to 'Annual_Precip'
-precip <- precip %>%
-  rename(Annual_Precip = Annual)
+Portland_precip <- Portland_precip %>%
+  rename(Portland_Annual_Precip = Annual)
 
 # Merge temperature and precipitation data
 merged_data <- merged_data %>%
-  left_join(temp %>% select(Year, Annual_Temp), by = "Year") %>%
-  left_join(precip %>% select(Year, Annual_Precip), by = "Year")
+  left_join(portland_temp %>% select(Year, Portland_Annual_Temp), by = "Year") %>%
+  left_join(Portland_precip %>% select(Year, Portland_Annual_Precip), by = "Year")
+
+## Belfast
+# Convert Year column
+belfast_temp$Year <- as.integer(belfast_temp$Year)
+belfast_precip$Year <- as.integer(belfast_precip$Year)
+
+# Rename the 'Annual' column in the temperature dataset to 'Annual_Temp'
+belfast_temp <- belfast_temp %>%
+  rename(Belfast_Annual_Temp = Annual)
+
+# Rename the 'Annual' column in the precipitation dataset to 'Annual_Precip'
+belfast_precip <- belfast_precip %>%
+  rename(Belfast_Annual_Precip = Annual)
+
+# Merge temperature and precipitation data
+merged_data <- merged_data %>%
+  left_join(belfast_temp %>% select(Year, Belfast_Annual_Temp), by = "Year") %>%
+  left_join(belfast_precip %>% select(Year, Belfast_Annual_Precip), by = "Year")
+
+## Moosehead
+# Convert Year column
+moosehead_temp$Year <- as.integer(moosehead_temp$Year)
+moosehead_precip$Year <- as.integer(moosehead_precip$Year)
+
+# Rename the 'Annual' column in the temperature dataset to 'Annual_Temp'
+moosehead_temp <- moosehead_temp %>%
+  rename(Moosehead_Annual_Temp = Annual)
+
+# Rename the 'Annual' column in the precipitation dataset to 'Annual_Precip'
+moosehead_precip <- moosehead_precip %>%
+  rename(Moosehead_Annual_Precip = Annual)
+
+# Merge temperature and precipitation data
+merged_data <- merged_data %>%
+  left_join(moosehead_temp %>% select(Year, Moosehead_Annual_Temp), by = "Year") %>%
+  left_join(moosehead_precip %>% select(Year, Moosehead_Annual_Precip), by = "Year")
+
+## Gardnier
+# Convert Year column
+gardiner_temp$Year <- as.integer(gardiner_temp$Year)
+gardiner_precip$Year <- as.integer(gardiner_precip$Year)
+
+# Rename the 'Annual' column in the temperature dataset to 'Annual_Temp'
+gardiner_temp <- gardiner_temp %>%
+  rename(Gardiner_Annual_Temp = Annual)
+
+# Rename the 'Annual' column in the precipitation dataset to 'Annual_Precip'
+gardiner_precip <- gardiner_precip %>%
+  rename(Gardiner_Annual_Precip = Annual)
+
+# Merge temperature and precipitation data
+merged_data <- merged_data %>%
+  left_join(gardiner_temp %>% select(Year, Gardiner_Annual_Temp), by = "Year") %>%
+  left_join(gardiner_precip %>% select(Year, Gardiner_Annual_Precip), by = "Year")
+
+## Augusta
+# Convert Year column
+augusta_temp$Year <- as.integer(augusta_temp$Year)
+augusta_precip$Year <- as.integer(augusta_precip$Year)
+
+# Rename the 'Annual' column in the temperature dataset to 'Annual_Temp'
+augusta_temp <- augusta_temp %>%
+  rename(Augusta_Annual_Temp = Annual)
+
+# Rename the 'Annual' column in the precipitation dataset to 'Annual_Precip'
+augusta_precip <- augusta_precip %>%
+  rename(Augusta_Annual_Precip = Annual)
+
+# Merge temperature and precipitation data
+merged_data <- merged_data %>%
+  left_join(augusta_temp %>% select(Year, Augusta_Annual_Temp), by = "Year") %>%
+  left_join(augusta_precip %>% select(Year, Augusta_Annual_Precip), by = "Year")
+
+# Replace any "M" values with NA
+merged_data[merged_data == "M"] <- NA
 
 head(merged_data)
 summary(merged_data)
@@ -455,6 +733,45 @@ merged_data <- merged_data %>%
 
 # Check merged dataset
 head(merged_data)
+```
+
+### Historic GDP
+
+```{r}
+# Merge GDP data with existing merged_data
+merged_data <- merged_data %>%
+  left_join(gdp_data_cleaned, by = "Year")  # Match based on Year column
+
+```
+
+### Per Capita Consumption
+
+```{r}
+# Merge GDP data with existing merged_data
+merged_data <- merged_data %>%
+  left_join(consumption, by = "Year")  # Match based on Year column
+```
+
+### Maine Population
+```{r}
+colnames(state_population_subset)[colnames(state_population_subset) == "Population"] <- "State_Population"
+
+# Merge State Population data with existing merged_data
+merged_data <- merged_data %>%
+  left_join(state_population_subset, by = "Year")  # Match based on Year column
+
+colnames(county_population_subset)[colnames(county_population_subset) == "COUNTY"] <- "County"
+colnames(county_population_subset)[colnames(county_population_subset) == "Population"] <- "County_Population"
+
+# Remove the word "County" from the County column
+#county_population_subset$County <- gsub(" County", "", county_population_subset$County)
+
+# Display the first few rows to verify the change
+#head(county_population_subset)
+
+# Merge GDP data with existing merged_data
+#merged_data <- merged_data %>%
+#  left_join(county_population_subset, by = c("Year", "County"))  # Match based on Year column
 ```
 
 ### Interpolate Missing Values
@@ -547,10 +864,14 @@ summary(interpolated_data)
 
 ## Forecast Results
 
+```{r}
+colnames(interpolated_data)
+```
+
 ### Sea-Level Rise Scenarios
 ```{r}
 # Set forecast years (2025-2100)
-future_years <- seq(2020, 2100, by = 1)
+future_years <- seq(2020, 2040, by = 1)
 
 # Predict baseline sea levels (historical trend)
 slr_model <- lm(Mean_Sea_Level_m ~ Year, data = interpolated_data)

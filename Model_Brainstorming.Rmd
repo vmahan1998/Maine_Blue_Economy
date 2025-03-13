@@ -89,13 +89,13 @@ summary(barharbor)
 # Function to clean and process water level data
 clean_water_levels <- function(df, station_name) {
   df <- df %>%
-    mutate(Date = as.Date(Date, format="%Y/%m/%d"),
+    dplyr::mutate(Date = as.Date(Date, format="%Y/%m/%d"),
            Year = year(Date)) %>%
-    select(Year, MSL..ft.) %>%
-    rename(Mean_Sea_Level_ft = MSL..ft.) %>%
-    group_by(Year) %>%
-    summarize(Mean_Sea_Level_ft = mean(Mean_Sea_Level_ft, na.rm = TRUE)) %>%
-    mutate(Station = station_name)
+    dplyr::select(Year, MSL..ft.) %>%
+    dplyr::rename(Mean_Sea_Level_ft = MSL..ft.) %>%
+    dplyr::group_by(Year) %>%
+    dplyr::summarize(Mean_Sea_Level_ft = mean(Mean_Sea_Level_ft, na.rm = TRUE)) %>%
+    dplyr::mutate(Station = station_name)
   
   return(df)
 }
@@ -249,8 +249,8 @@ unique(stocks_long$Variable)  # See all unique variable names
 
 # Keep only "Total Catch"
 stocks_total_catch <- stocks_total_catch %>%
-  filter(str_detect(Variable, "Total Catch|Estimated Commercial Catch")) %>%
-  select(Year, species, Value)  # Keep only relevant columns
+  dplyr::filter(str_detect(Variable, "Total Catch|Estimated Commercial Catch")) %>%
+  dplyr::select(Year, species, Value)  # Keep only relevant columns
 
 colnames(stocks_total_catch)[colnames(stocks_total_catch) == "Value"] <- "Total_Catch"
 
@@ -386,6 +386,32 @@ colnames(augusta_precip)
 head(augusta_precip, 10)
 str(augusta_precip)
 summary(augusta_precip)
+
+convert_to_numeric <- function(df) {
+  df[] <- lapply(df, function(x) as.numeric(as.character(x)))  # Convert all columns to numeric
+  return(df)
+}
+
+# Portland
+portland_temp <- convert_to_numeric(portland_temp)
+Portland_precip <- convert_to_numeric(Portland_precip)
+
+# Belfast
+belfast_temp <- convert_to_numeric(belfast_temp)
+belfast_precip <- convert_to_numeric(belfast_precip)
+
+# Moosehead
+moosehead_temp <- convert_to_numeric(moosehead_temp)
+moosehead_precip <- convert_to_numeric(moosehead_precip)
+
+# Gardiner
+gardiner_temp <- convert_to_numeric(gardiner_temp)
+gardiner_precip <- convert_to_numeric(gardiner_precip)
+
+# Augusta
+augusta_temp <- convert_to_numeric(augusta_temp)
+augusta_precip <- convert_to_numeric(augusta_precip)
+
 ```
 
 ### Maine Population Levels
@@ -433,11 +459,11 @@ head(county_population_interp)
 
 # Subset county-level population data
 county_population_subset <- county_population_interp %>%
-  select(Year, COUNTY, Population)
+  dplyr::select(Year, COUNTY, Population)
 
 # Subset state-level population data
 state_population_subset <- state_population_interp %>%
-  select(Year, Population)
+  dplyr::select(Year, Population)
 
 # Save the new subsets as CSV files
 write.csv(county_population_subset, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/County_Population_Subset.csv", row.names = FALSE)
@@ -460,9 +486,9 @@ head(GDP)
 
 # Extract only the year from the Date column
 gdp_data_cleaned <- GDP %>%
-  mutate(Year = year(mdy(Date))) %>%  # Convert date and extract year
-  filter(Year >= 1950 & Year <= 2020) %>%  # Keep only years 1950-2020
-  select(Year, GDP..Billions.of.US..., Per.Capita..US..., Annual...Change)  # Keep relevant columns
+  dplyr:: mutate(Year = year(mdy(Date))) %>%  # Convert date and extract year
+  dplyr::filter(Year >= 1950 & Year <= 2020) %>%  # Keep only years 1950-2020
+  dplyr::select(Year, GDP..Billions.of.US..., Per.Capita..US..., Annual...Change)  # Keep relevant columns
 
 # Save the cleaned dataset
 write.csv(gdp_data_cleaned, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/GDP_Data_Cleaned.csv", row.names = FALSE)
@@ -485,7 +511,34 @@ head(consumption)
 ### Fisheries Exports
 
 ```{r}
+# Load the data from CSV
+exports <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Historical_Fisheries_Exports.csv",
+                    stringsAsFactors = FALSE, 
+                    check.names = FALSE, 
+                    skip = 0)  # Skip no rows initially
 
+# Transpose the data so that rows become columns
+exports <- t(exports)
+
+# Convert the transposed matrix to a data frame
+exports_df <- as.data.frame(exports, stringsAsFactors = FALSE)
+
+# Ensure that we are only converting the numeric data columns
+exports_df[] <- lapply(exports_df, function(x) as.numeric(as.character(x)))
+
+# Set the first row as the column names
+colnames(exports_df) <- exports_df[1, ]
+
+# Remove the first row (which is now redundant)
+exports_df <- exports_df[-1, ]
+rownames(exports_df) <- NULL
+
+# Rename the columns to make the first one "Fishery_Exports" and the second one "Year"
+colnames(exports_df)[1] <- "Fishery_Exports"
+colnames(exports_df)[2] <- "Year"
+
+# View the first few rows of the data frame to ensure everything is correct
+head(exports_df)
 ```
 
 
@@ -606,11 +659,11 @@ enso_data$Year <- as.integer(enso_data$YR)
 
 # Summarize by Year: Identify the dominant ENSO phase per year
 dominant_enso <- enso_data %>%
-  group_by(Year, ENSO_Phase) %>%
-  summarise(Count = n(), .groups = "drop") %>%  # Count occurrences of each phase per year
-  arrange(Year, desc(Count)) %>%  # Sort by Year and Count (descending)
-  distinct(Year, .keep_all = TRUE) %>%  # Keep only the most frequent ENSO phase per year
-  select(Year, ENSO_Phase)  # Keep only relevant columns
+  dplyr::group_by(Year, ENSO_Phase) %>%
+  dplyr::summarise(Count = n(), .groups = "drop") %>%  # Count occurrences of each phase per year
+  dplyr::arrange(Year, desc(Count)) %>%  # Sort by Year and Count (descending)
+  dplyr::distinct(Year, .keep_all = TRUE) %>%  # Keep only the most frequent ENSO phase per year
+  dplyr::select(Year, ENSO_Phase)  # Keep only relevant columns
 
 # Merge dominant ENSO phase with merged_data
 merged_data <- merged_data %>%
@@ -638,8 +691,8 @@ Portland_precip <- Portland_precip %>%
 
 # Merge temperature and precipitation data
 merged_data <- merged_data %>%
-  left_join(portland_temp %>% select(Year, Portland_Annual_Temp), by = "Year") %>%
-  left_join(Portland_precip %>% select(Year, Portland_Annual_Precip), by = "Year")
+  left_join(portland_temp %>% dplyr::select(Year, Portland_Annual_Temp), by = "Year") %>%
+  left_join(Portland_precip %>% dplyr::select(Year, Portland_Annual_Precip), by = "Year")
 
 ## Belfast
 # Convert Year column
@@ -656,8 +709,8 @@ belfast_precip <- belfast_precip %>%
 
 # Merge temperature and precipitation data
 merged_data <- merged_data %>%
-  left_join(belfast_temp %>% select(Year, Belfast_Annual_Temp), by = "Year") %>%
-  left_join(belfast_precip %>% select(Year, Belfast_Annual_Precip), by = "Year")
+  left_join(belfast_temp %>% dplyr::select(Year, Belfast_Annual_Temp), by = "Year") %>%
+  left_join(belfast_precip %>% dplyr::select(Year, Belfast_Annual_Precip), by = "Year")
 
 ## Moosehead
 # Convert Year column
@@ -674,8 +727,8 @@ moosehead_precip <- moosehead_precip %>%
 
 # Merge temperature and precipitation data
 merged_data <- merged_data %>%
-  left_join(moosehead_temp %>% select(Year, Moosehead_Annual_Temp), by = "Year") %>%
-  left_join(moosehead_precip %>% select(Year, Moosehead_Annual_Precip), by = "Year")
+  left_join(moosehead_temp %>% dplyr::select(Year, Moosehead_Annual_Temp), by = "Year") %>%
+  left_join(moosehead_precip %>% dplyr::select(Year, Moosehead_Annual_Precip), by = "Year")
 
 ## Gardnier
 # Convert Year column
@@ -692,8 +745,8 @@ gardiner_precip <- gardiner_precip %>%
 
 # Merge temperature and precipitation data
 merged_data <- merged_data %>%
-  left_join(gardiner_temp %>% select(Year, Gardiner_Annual_Temp), by = "Year") %>%
-  left_join(gardiner_precip %>% select(Year, Gardiner_Annual_Precip), by = "Year")
+  left_join(gardiner_temp %>% dplyr::select(Year, Gardiner_Annual_Temp), by = "Year") %>%
+  left_join(gardiner_precip %>% dplyr::select(Year, Gardiner_Annual_Precip), by = "Year")
 
 ## Augusta
 # Convert Year column
@@ -710,8 +763,8 @@ augusta_precip <- augusta_precip %>%
 
 # Merge temperature and precipitation data
 merged_data <- merged_data %>%
-  left_join(augusta_temp %>% select(Year, Augusta_Annual_Temp), by = "Year") %>%
-  left_join(augusta_precip %>% select(Year, Augusta_Annual_Precip), by = "Year")
+  left_join(augusta_temp %>% dplyr::select(Year, Augusta_Annual_Temp), by = "Year") %>%
+  left_join(augusta_precip %>% dplyr::select(Year, Augusta_Annual_Precip), by = "Year")
 
 # Replace any "M" values with NA
 merged_data[merged_data == "M"] <- NA
@@ -774,6 +827,18 @@ colnames(county_population_subset)[colnames(county_population_subset) == "Popula
 #  left_join(county_population_subset, by = c("Year", "County"))  # Match based on Year column
 ```
 
+### Fisheries Exports
+
+```{r}
+# Merge Export data with existing merged_data
+
+merged_data <- merged_data %>%
+  left_join(exports_df, by = "Year")  # Match based on Year column
+
+merged_data$Fishery_Exports <- ifelse(merged_data$Fishery_Exports == 0, NA, merged_data$Fishery_Exports)
+
+```
+
 ### Interpolate Missing Values
 
 ```{r}
@@ -803,84 +868,99 @@ interpolated_data <- interpolated_data %>%
 
 ```{r}
 
-species_list1 <- unique(interpolated_data$species)
-print(species_list1)
-species_list2 <- unique(stocks_total_catch$species)
-print(species_list2)
+#species_list1 <- unique(interpolated_data$species)
+#print(species_list1)
+#species_list2 <- unique(stocks_total_catch$species)
+#print(species_list2)
 
 # Function to clean species names
-clean_species_name <- function(species) {
-  species <- str_trim(species)  # Remove extra spaces
-  species <- str_remove(species, "Gulf of Maine.*")  # Remove extra descriptors
-  species <- str_remove(species, "Georges Bank.*")   # Remove extra descriptors
-  species <- str_remove(species, "\\d+$")           # Remove trailing numbers
-  return(species)
-}
+#clean_species_name <- function(species) {
+#  species <- str_trim(species)  # Remove extra spaces
+#  species <- str_remove(species, "Gulf of Maine.*")  # Remove extra descriptors
+#  species <- str_remove(species, "Georges Bank.*")   # Remove extra descriptors
+#  species <- str_remove(species, "\\d+$")           # Remove trailing numbers
+#  return(species)
+#}
 
 # Apply cleaning function
-species_list2_clean <- unique(sapply(species_list2, clean_species_name))
+#species_list2_clean <- unique(sapply(species_list2, clean_species_name))
 
 # Function to find closest match
-find_closest_match <- function(species, species_list) {
-  if (is.na(species) || species == "") return(NA)  # Handle missing values
-  
-  distances <- stringdist(species, species_list, method = "jw")  # Jaro-Winkler similarity
-  closest_index <- which.min(distances)  # Get closest match
-  return(species_list[closest_index])  # Return best match
-}
+#find_closest_match <- function(species, species_list) {
+#  if (is.na(species) || species == "") return(NA)  # Handle missing values
+#  
+#  distances <- stringdist(species, species_list, method = "jw")  # Jaro-Winkler similarity
+#  closest_index <- which.min(distances)  # Get closest match
+#  return(species_list[closest_index])  # Return best match
+#}
 
 # Apply matching function
-matched_species <- vapply(species_list2_clean, find_closest_match, character(1), species_list = species_list1)
+#matched_species <- vapply(species_list2_clean, find_closest_match, character(1), species_list = species_list1)
 
 # Create a lookup table
-species_mapping <- data.frame(Original_Species = species_list2_clean, Matched_Species = matched_species)
+#species_mapping <- data.frame(Original_Species = species_list2_clean, Matched_Species = matched_species)
 
 # Inspect mapping
-print(species_mapping)
+#print(species_mapping)
 
 # Ensure stocks_long species names match cleaned species list
-stocks_total_catch$Cleaned_Species <- sapply(stocks_total_catch$species, clean_species_name)
+#stocks_total_catch$Cleaned_Species <- sapply(stocks_total_catch$species, clean_species_name)
 
 # Merge with fuzzy-matched species names
-stocks_total_catch <- stocks_total_catch %>%
-  left_join(species_mapping, by = c("Cleaned_Species" = "Original_Species"))
+#stocks_total_catch <- stocks_total_catch %>%
+#  left_join(species_mapping, by = c("Cleaned_Species" = "Original_Species"))
 
 # Replace with matched species name
-stocks_total_catch$species <- stocks_total_catch$Matched_Species
+#stocks_total_catch$species <- stocks_total_catch$Matched_Species
 
 # Drop temporary columns
-stocks_total_catch <- stocks_total_catch %>% select(-Cleaned_Species, -Matched_Species)
+#stocks_total_catch <- stocks_total_catch %>% dplyr::select(-Cleaned_Species, -Matched_Species)
 
 # Verify changes
-head(stocks_total_catch)
+#head(stocks_total_catch)
 
-interpolated_data <- interpolated_data %>%
-  left_join(stocks_total_catch, by = c("Year", "species"))
+#interpolated_data <- interpolated_data %>%
+#  left_join(stocks_total_catch, by = c("Year", "species"))
 
 # Check for missing matches
-summary(interpolated_data)
+#summary(interpolated_data)
 
 ```
 
 ## Forecast Results
 
 ```{r}
-colnames(interpolated_data)
-```
+#install.packages("vars")
+#install.packages("BVAR")
 
-### Sea-Level Rise Scenarios
-```{r}
+colnames(interpolated_data)
+
 # Set forecast years (2025-2100)
 future_years <- seq(2020, 2040, by = 1)
 
+# Convert ENSO Phase to Numeric
+interpolated_data$ENSO_Phase <- ifelse(interpolated_data$ENSO_Phase == "El Niño", 1,
+                                       ifelse(interpolated_data$ENSO_Phase == "La Niña", -1, 0))
+
+head(interpolated_data,20)
+
+# Get unique species
+species_list <- unique(interpolated_data$species)
+print(species_list)
+
+```
+
+
+### Sea-Level Rise Scenarios
+```{r}
 # Predict baseline sea levels (historical trend)
 slr_model <- lm(Mean_Sea_Level_m ~ Year, data = interpolated_data)
 baseline_sea_levels <- predict(slr_model, newdata = data.frame(Year = future_years))
 
 # IPCC AR6-Based Sea Level Rise Adjustments
-low_slr <- baseline_sea_levels + (0.44 * ((future_years - 2025) / (2100 - 2025))^2)  # SSP1-2.6 (~0.44m by 2100)
-moderate_slr <- baseline_sea_levels + (0.60 * ((future_years - 2025) / (2100 - 2025))^2)  # SSP2-4.5 (~0.60m by 2100)
-high_slr <- baseline_sea_levels + (1.0 * ((future_years - 2025) / (2100 - 2025))^2)  # SSP5-8.5 (~1.0m by 2100)
+low_slr <- baseline_sea_levels + (0.11 * ((future_years - 2020) / (2040 - 2020))^2)  # SSP1-2.6 (~0.44m by 2100)
+moderate_slr <- baseline_sea_levels + (0.15 * ((future_years - 2020) / (2040 - 2020))^2)  # SSP2-4.5 (~0.60m by 2100)
+high_slr <- baseline_sea_levels + (0.25 * ((future_years - 2020) / (2040 - 2020))^2)  # SSP5-8.5 (~1.0m by 2100)
 
 # Create DataFrame for SLR Scenarios
 slr_data <- data.frame(
@@ -892,7 +972,7 @@ slr_data <- data.frame(
 # Plot SLR Scenarios
 ggplot(slr_data, aes(x = Year, y = SLR, color = Scenario)) +
   geom_line(size = 1) +
-  labs(title = "Projected Sea Level Rise Scenarios (2020-2100)",
+  labs(title = "Projected Sea Level Rise Scenarios (2020-2040)",
        x = "Year", y = "Sea Level Rise (m)") +
   theme_minimal()
 
@@ -900,29 +980,132 @@ ggplot(slr_data, aes(x = Year, y = SLR, color = Scenario)) +
 
 ### Warming Scenarios
 ```{r}
+## Portland
+
 # Generate warming scenarios (based on temperature trends)
-temp_model <- lm(Annual_Temp ~ Year, data = interpolated_data)
-baseline_temp <- predict(temp_model, newdata = data.frame(Year = future_years))
+portland_temp_model <- lm(Portland_Annual_Temp ~ Year, data = interpolated_data)
+portland_baseline_temp <- predict(portland_temp_model, newdata = data.frame(Year = future_years))
 
 # IPCC AR6-Based Temperature Adjustments
-low_temp <- baseline_temp + (1.8 * ((future_years - 2025) / (2100 - 2025)))  # SSP1-2.6 (~1.8°C increase by 2100)
-moderate_temp <- baseline_temp + (2.7 * ((future_years - 2025) / (2100 - 2025)))  # SSP2-4.5 (~2.7°C increase by 2100)
-high_temp <- baseline_temp + (4.4 * ((future_years - 2025) / (2100 - 2025)))  # SSP5-8.5 (~4.4°C increase by 2100)
+portland_low_temp <- portland_baseline_temp + (0.45 * ((future_years - 2020) / (2040 - 2020)))  # SSP1-2.6 (~1.8°C increase by 2100)
+portland_moderate_temp <- portland_baseline_temp + (0.675 * ((future_years - 2020) / (2040 - 2020)))  # SSP2-4.5 (~2.7°C increase by 2100)
+portland_high_temp <- portland_baseline_temp + (1.1 * ((future_years - 2020) / (2040 - 2020)))  # SSP5-8.5 (~4.4°C increase by 2100)
 
 # Create DataFrame for Temperature Scenarios
-temp_data <- data.frame(
+portland_temp_data <- data.frame(
   Year = rep(future_years, times = 3),
-  Temperature = c(low_temp, moderate_temp, high_temp),
+  Temperature = c(portland_low_temp, portland_moderate_temp, portland_high_temp),
   Scenario = rep(c("Low Warming", "Moderate Warming", "High Warming"), each = length(future_years))
 )
 
 # Plot Temperature Warming Scenarios
-ggplot(temp_data, aes(x = Year, y = Temperature, color = Scenario)) +
-  geom_line(size = 1) +
-  labs(title = "Projected Temperature Warming Scenarios (2020-2100)",
+ggplot(portland_temp_data, aes(x = Year, y = Temperature, color = Scenario)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Projected Temperature Warming Scenarios Portland, ME (2020-2040)",
+       x = "Year", y = "Temperature (°C)") +
+  theme_minimal()
+
+## Belfast
+
+# Generate warming scenarios (based on temperature trends)
+belfast_temp_model <- lm(Belfast_Annual_Temp ~ Year, data = interpolated_data)
+belfast_baseline_temp <- predict(belfast_temp_model, newdata = data.frame(Year = future_years))
+
+# IPCC AR6-Based Temperature Adjustments
+belfast_low_temp <- belfast_baseline_temp + (0.45 * ((future_years - 2020) / (2040 - 2020)))  # SSP1-2.6 (~1.8°C increase by 2100)
+belfast_moderate_temp <- belfast_baseline_temp + (0.675 * ((future_years - 2020) / (2040 - 2020)))  # SSP2-4.5 (~2.7°C increase by 2100)
+belfast_high_temp <- belfast_baseline_temp + (1.1 * ((future_years - 2020) / (2040 - 2020)))  # SSP5-8.5 (~4.4°C increase by 2100)
+
+# Create DataFrame for Temperature Scenarios
+belfast_temp_data <- data.frame(
+  Year = rep(future_years, times = 3),
+  Temperature = c(belfast_low_temp, belfast_moderate_temp, belfast_high_temp),
+  Scenario = rep(c("Low Warming", "Moderate Warming", "High Warming"), each = length(future_years))
+)
+
+# Plot Temperature Warming Scenarios
+ggplot(belfast_temp_data, aes(x = Year, y = Temperature, color = Scenario)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Projected Temperature Warming Scenarios Belfast, ME (2020-2040)",
+       x = "Year", y = "Temperature (°C)") +
+  theme_minimal()
+
+## Moosehead
+
+# Generate warming scenarios (based on temperature trends)
+moosehead_temp_model <- lm(Moosehead_Annual_Temp ~ Year, data = interpolated_data)
+moosehead_baseline_temp <- predict(moosehead_temp_model, newdata = data.frame(Year = future_years))
+
+# IPCC AR6-Based Temperature Adjustments
+moosehead_low_temp <- moosehead_baseline_temp + (0.45 * ((future_years - 2020) / (2040 - 2020)))  # SSP1-2.6 (~1.8°C increase by 2100)
+moosehead_moderate_temp <- moosehead_baseline_temp + (0.675 * ((future_years - 2020) / (2040 - 2020)))  # SSP2-4.5 (~2.7°C increase by 2100)
+moosehead_high_temp <- moosehead_baseline_temp + (1.1 * ((future_years - 2020) / (2040 - 2020)))  # SSP5-8.5 (~4.4°C increase by 2100)
+
+# Create DataFrame for Temperature Scenarios
+moosehead_temp_data <- data.frame(
+  Year = rep(future_years, times = 3),
+  Temperature = c(moosehead_low_temp, moosehead_moderate_temp, moosehead_high_temp),
+  Scenario = rep(c("Low Warming", "Moderate Warming", "High Warming"), each = length(future_years))
+)
+
+# Plot Temperature Warming Scenarios
+ggplot(moosehead_temp_data, aes(x = Year, y = Temperature, color = Scenario)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Projected Temperature Warming Scenarios Moosehead, ME (2020-2040)",
+       x = "Year", y = "Temperature (°C)") +
+  theme_minimal()
+
+## Gardiner
+
+# Generate warming scenarios (based on temperature trends)
+gardiner_temp_model <- lm(Gardiner_Annual_Temp ~ Year, data = interpolated_data)
+gardiner_baseline_temp <- predict(gardiner_temp_model, newdata = data.frame(Year = future_years))
+
+# IPCC AR6-Based Temperature Adjustments
+gardiner_low_temp <- gardiner_baseline_temp + (0.45 * ((future_years - 2020) / (2040 - 2020)))  # SSP1-2.6 (~1.8°C increase by 2100)
+gardiner_moderate_temp <- gardiner_baseline_temp + (0.675 * ((future_years - 2020) / (2040 - 2020)))  # SSP2-4.5 (~2.7°C increase by 2100)
+gardiner_high_temp <- gardiner_baseline_temp + (1.1 * ((future_years - 2020) / (2040 - 2020)))  # SSP5-8.5 (~4.4°C increase by 2100)
+
+# Create DataFrame for Temperature Scenarios
+gardiner_temp_data <- data.frame(
+  Year = rep(future_years, times = 3),
+  Temperature = c(gardiner_low_temp, gardiner_moderate_temp, gardiner_high_temp),
+  Scenario = rep(c("Low Warming", "Moderate Warming", "High Warming"), each = length(future_years))
+)
+
+# Plot Temperature Warming Scenarios
+ggplot(gardiner_temp_data, aes(x = Year, y = Temperature, color = Scenario)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Projected Temperature Warming Scenarios Gardiner, ME (2020-2040)",
+       x = "Year", y = "Temperature (°C)") +
+  theme_minimal()
+
+## Augusta
+
+# Generate warming scenarios (based on temperature trends)
+augusta_temp_model <- lm(Augusta_Annual_Temp ~ Year, data = interpolated_data)
+augusta_baseline_temp <- predict(augusta_temp_model, newdata = data.frame(Year = future_years))
+
+# IPCC AR6-Based Temperature Adjustments
+augusta_low_temp <- augusta_baseline_temp + (0.45 * ((future_years - 2020) / (2040 - 2020)))  # SSP1-2.6 (~1.8°C increase by 2100)
+augusta_moderate_temp <- augusta_baseline_temp + (0.675 * ((future_years - 2020) / (2040 - 2020)))  # SSP2-4.5 (~2.7°C increase by 2100)
+augusta_high_temp <- augusta_baseline_temp + (1.1 * ((future_years - 2020) / (2040 - 2020)))  # SSP5-8.5 (~4.4°C increase by 2100)
+
+# Create DataFrame for Temperature Scenarios
+augusta_temp_data <- data.frame(
+  Year = rep(future_years, times = 3),
+  Temperature = c(augusta_low_temp, augusta_moderate_temp, augusta_high_temp),
+  Scenario = rep(c("Low Warming", "Moderate Warming", "High Warming"), each = length(future_years))
+)
+
+# Plot Temperature Warming Scenarios
+ggplot(augusta_temp_data, aes(x = Year, y = Temperature, color = Scenario)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Projected Temperature Warming Scenarios Augusta, ME (2020-2040)",
        x = "Year", y = "Temperature (°C)") +
   theme_minimal()
 ```
+
 ### ENSO Scenarios
 ```{r}
 set.seed(42)  # Ensure reproducibility
@@ -946,35 +1129,19 @@ enso_scenarios <- data.frame(
 enso_scenarios %>%
   pivot_longer(cols = starts_with("ENSO"), names_to = "Cycle", values_to = "Index") %>%
   ggplot(aes(x = Year, y = Index, color = Cycle)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   theme_minimal() +
   labs(title = "Simulated ENSO Cycles (2020-2100)", y = "ENSO Index", x = "Year")
 
 ```
 
-### Fishing Policy Changes
+### Export Trends
 ```{r}
-# Create a baseline projection using a simple trend model (e.g., linear fit)
-catch_model <- lm(Total_Catch ~ Year, data = stocks_total_catch)
-
-# Predict baseline total catch for future years
-future_baseline_catch <- predict(catch_model, newdata = data.frame(Year = future_years))
-
-# Create Total Catch Scenarios
-Total_Catch_Scenario <- data.frame(
-  Year = future_years,
-  Catch_Baseline = future_baseline_catch,
-  Catch_Conservative = future_baseline_catch * 0.8,  # Reduce by 20%
-  Catch_Moderate = future_baseline_catch * 1.2,      # Increase by 20%
-  Catch_Aggressive = future_baseline_catch * 1.5     # Increase by 50%
-)
-
-# Inspect future projections
-head(Total_Catch_Scenario)
+#export_model
 
 ```
 
-### All Scenarios
+### NAO Index
 ```{r}
 # Generate a simple trend model for Annual_NAO
 nao_model <- lm(Annual_NAO ~ Year, data = interpolated_data)
@@ -982,400 +1149,271 @@ nao_model <- lm(Annual_NAO ~ Year, data = interpolated_data)
 # Predict baseline NAO for future years
 future_annual_nao <- predict(nao_model, newdata = data.frame(Year = future_years))
 
+```
+
+### Population Trends
+```{r}
+# Generate a simple trend model for state_population
+state_population_model <- lm(State_Population ~ Year, data = interpolated_data)
+
+# Predict baseline state_population for future years
+future_state_population <- predict(state_population_model, newdata = data.frame(Year = future_years))
+
+## By country
+# Generate a simple trend model for state_population
+civilian_population_model <- lm(Civilian.Population..Millions. ~ Year, data = interpolated_data)
+
+# Predict baseline state_population for future years
+future_Civilian.Population..Millions. <- predict(civilian_population_model, newdata = data.frame(Year = future_years))
+```
+
+### All Scenarios
+```{r}
+colnames(interpolated_data)
 # Create scenario-specific datasets with NAO included
 future_scenarios <- list(
   # Baseline Scenario
-  "Baseline" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  # Sea Level Rise Scenarios
-  "SLR_Low" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = low_slr, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "SLR_Moderate" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = moderate_slr, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "SLR_High" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = high_slr, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  # Temperature Scenarios
-  "Temp_Low" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = low_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "Temp_Moderate" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = moderate_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "Temp_High" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = high_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  # Combined SLR + Temp Scenarios
-  "SLR_Temp_Low" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = low_slr, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = low_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "SLR_Temp_Moderate" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = moderate_slr, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = moderate_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "SLR_Temp_High" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = high_slr, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = high_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  # ENSO Variability Scenarios
-  "ENSO_2yr" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "ENSO_3yr" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_3yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "ENSO_5yr" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_5yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "ENSO_7yr" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_7yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Baseline, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  # Fishing Policy Changes
-  "Fishing_Conservative" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Conservative, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "Fishing_Moderate" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Moderate, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  ),
-  
-  "Fishing_Aggressive" = data.frame(
-    Year = future_years, 
-    Mean_Sea_Level_m = baseline_sea_levels, 
-    ENSO_Phase = enso_scenarios$ENSO_2yr, 
-    Catch_Total = Total_Catch_Scenario$Catch_Aggressive, 
-    Annual_Temp = baseline_temp,
-    Annual_NAO = future_annual_nao
-  )
-)
-```
+# Baseline Scenario
+"Baseline" = data.frame(
+  Year = future_years, 
+  Mean_Sea_Level_m = baseline_sea_levels,  # Historical trend for sea level
+  Portland_Annual_Temp = portland_baseline_temp,  # Baseline temperature for Portland
+  Belfast_Annual_Temp = belfast_baseline_temp,  # Baseline temperature for Belfast
+  Moosehead_Annual_Temp = moosehead_baseline_temp,  # Baseline temperature for Moosehead
+  Gardiner_Annual_Temp = gardiner_baseline_temp,  # Baseline temperature for Gardiner
+  Augusta_Annual_Temp = augusta_baseline_temp,  # Baseline temperature for Augusta
+  Annual_NAO = future_annual_nao,  # NAO for low climate change
+  Civilian_Population_Millions = future_Civilian.Population..Millions.,  
+  State_Population = future_state_population 
+),
 
+# Low Climate Change (SLR Low, Temp Low)
+"Low_Climate" = data.frame(
+  Year = future_years, 
+  Mean_Sea_Level_m = low_slr,  # Low sea-level rise projection
+  Portland_Annual_Temp = portland_low_temp,  # Low warming projection for Portland
+  Belfast_Annual_Temp = belfast_low_temp,  # Low warming projection for Belfast
+  Moosehead_Annual_Temp = moosehead_low_temp,  # Low warming projection for Moosehead
+  Gardiner_Annual_Temp = gardiner_low_temp,  # Low warming projection for Gardiner
+  Augusta_Annual_Temp = augusta_low_temp,  # Low warming projection for Augusta
+  Annual_NAO = future_annual_nao,  # NAO for low climate change
+  Civilian_Population_Millions = future_Civilian.Population..Millions.,  
+  State_Population = future_state_population 
+),
+
+# Moderate Climate Change (SLR Moderate, Temp Moderate)
+"Moderate_Climate" = data.frame(
+  Year = future_years, 
+  Mean_Sea_Level_m = moderate_slr,  # Moderate sea-level rise projection
+  Portland_Annual_Temp = portland_moderate_temp,  # Moderate warming projection for Portland
+  Belfast_Annual_Temp = belfast_moderate_temp,  # Moderate warming projection for Belfast
+  Moosehead_Annual_Temp = moosehead_moderate_temp,  # Moderate warming projection for Moosehead
+  Gardiner_Annual_Temp = gardiner_moderate_temp,  # Moderate warming projection for Gardiner
+  Augusta_Annual_Temp = augusta_moderate_temp,  # Moderate warming projection for Augusta
+  Annual_NAO = future_annual_nao,  # NAO for low climate change
+  Civilian_Population_Millions = future_Civilian.Population..Millions.,  
+  State_Population = future_state_population 
+),
+
+# Extreme Climate Change (SLR High, Temp High)
+"Extreme_Climate" = data.frame(
+  Year = future_years, 
+  Mean_Sea_Level_m = high_slr,  # High sea-level rise projection
+  Portland_Annual_Temp = portland_high_temp,  # Extreme warming projection for Portland
+  Belfast_Annual_Temp = belfast_high_temp,  # Extreme warming projection for Belfast
+  Moosehead_Annual_Temp = moosehead_high_temp,  # Extreme warming projection for Moosehead
+  Gardiner_Annual_Temp = gardiner_high_temp,  # Extreme warming projection for Gardiner
+  Augusta_Annual_Temp = augusta_high_temp,  # Extreme warming projection for Augusta
+  Annual_NAO = future_annual_nao,  # NAO for low climate change
+  Civilian_Population_Millions = future_Civilian.Population..Millions.,  
+  State_Population = future_state_population
+)
+  
+)
+
+# Extract all required variables from the training dataset
+required_vars <- colnames(interpolated_data)
+
+# Function to add missing variables with the last observed value
+fill_missing_with_last_value <- function(df_train, df_future) {
+  for (var in required_vars) {
+    if (!(var %in% colnames(df_future))) {
+      # Get last observed (non-NA) value from df_train
+      last_value <- tail(df_train[[var]][!is.na(df_train[[var]])], 1)
+      
+      # If there is no historical value (completely missing column), set to NA
+      if (length(last_value) == 0) {
+        last_value <- NA
+      }
+      
+      # Assign the last observed value to all future years
+      df_future[[var]] <- last_value
+    }
+  }
+  return(df_future)
+}
+
+# Apply the function to all future scenarios
+future_scenarios <- lapply(future_scenarios, function(df) {
+  fill_missing_with_last_value(interpolated_data, df)
+})
+```
 
 ### Predict Species Results
-```{r}
-
-head(interpolated_data,20)
-
-# Get unique species
-species_list <- unique(interpolated_data$species)
-species_forecasts <- list()
-
-# Iterate through species and create forecasts
-for (species_name in species_list) {
-  cat("\nProcessing Species:", species_name, "\n")
-  
-  # Filter data for species and historical period (<= 2019)
-  species_data <- interpolated_data %>%
-    filter(species == species_name, Year <= 2019) %>%
-    select(Year, Total_Weight_kg, Total_Value, Mean_Sea_Level_m, Annual_Temp, ENSO_Phase, Annual_NAO) %>%
-    arrange(Year)
-
-  # Skip species with no data
-  if (nrow(species_data) == 0) next  
-
-  # Fill missing values using interpolation
-  species_data <- species_data %>%
-    mutate(across(c(Total_Weight_kg, Total_Value, Mean_Sea_Level_m, Annual_Temp, Annual_NAO), ~ zoo::na.approx(., na.rm = FALSE, rule = 2)))
-
-  # Convert ENSO_Phase to numeric categories (-1 = La Niña, 0 = Neutral, 1 = El Niño)
-  species_data$ENSO_Phase_Num <- case_when(
-    species_data$ENSO_Phase == "La Niña" ~ -1,
-    species_data$ENSO_Phase == "Neutral" ~ 0,
-    species_data$ENSO_Phase == "El Niño" ~ 1,
-    TRUE ~ 0  # Default to Neutral if unknown
-  )
-
-  # Create time series objects
-  ts_weight <- ts(species_data$Total_Weight_kg, start = min(species_data$Year), frequency = 1)
-  ts_value <- ts(species_data$Total_Value, start = min(species_data$Year), frequency = 1)
-
-  # Fit ARIMA models with external regressors (SLR, Temp, ENSO, NAO)
-  fit_weight <- auto.arima(ts_weight, xreg = cbind(species_data$Mean_Sea_Level_m, species_data$Annual_Temp, species_data$ENSO_Phase_Num, species_data$Annual_NAO), seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
-  fit_value <- auto.arima(ts_value, xreg = cbind(species_data$Mean_Sea_Level_m, species_data$Annual_Temp, species_data$ENSO_Phase_Num, species_data$Annual_NAO), seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
-
-  # Forecast for all future scenarios
-  for (scenario_name in names(future_scenarios)) {
-    scenario_data <- future_scenarios[[scenario_name]]
-
-    # Convert ENSO phase to numeric
-    scenario_data$ENSO_Phase_Num <- case_when(
-      scenario_data$ENSO_Phase == "La Niña" ~ -1,
-      scenario_data$ENSO_Phase == "Neutral" ~ 0,
-      scenario_data$ENSO_Phase == "El Niño" ~ 1,
-      TRUE ~ 0
-    )
-
-    # Forecast future landings and value
-    forecast_weight <- forecast(fit_weight, xreg = cbind(scenario_data$Mean_Sea_Level_m, scenario_data$Annual_Temp, scenario_data$ENSO_Phase_Num, scenario_data$Annual_NAO), h = length(future_years))
-    forecast_value <- forecast(fit_value, xreg = cbind(scenario_data$Mean_Sea_Level_m, scenario_data$Annual_Temp, scenario_data$ENSO_Phase_Num, scenario_data$Annual_NAO), h = length(future_years))
-
-    # Store results
-    species_forecasts[[paste(species_name, scenario_name, sep = "_")]] <- data.frame(
-      Year = future_years,
-      Scenario = scenario_name,
-      species = species_name,
-      Pred_Total_Weight_kg = as.numeric(forecast_weight$mean),
-      Pred_Total_Value = as.numeric(forecast_value$mean)
-    )
-  }
-}
-
-# Combine all forecasts into one dataframe
-final_species_forecast <- bind_rows(species_forecasts)
-
-# Save final dataset
-write.csv(final_species_forecast, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/species_forecast_results.csv", row.names = FALSE)
-
-# Define output directory
-output_dir <- "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/Plots"
-
-# Ensure the directory exists
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE)
-}
-
-# Get list of unique species
-species_list <- unique(final_species_forecast$species)
-
-# Iterate through species to create and save individual plots
-for (species_name in species_list) {
-  species_data <- final_species_forecast %>% filter(species == species_name)
-
-  # Plot for Total Weight
-  weight_plot <- ggplot(species_data, aes(x = Year, y = Pred_Total_Weight_kg, color = Scenario)) +
-    geom_line(size = 1) +
-    labs(title = paste("Projected Landings for", species_name),
-         x = "Year", y = "Total Weight (kg)") +
-    theme_minimal() +
-    theme(legend.position = "bottom")
-
-  # Save Total Weight plot
-  weight_plot_filename <- paste0(output_dir, "/", gsub(" ", "_", species_name), "_Total_Weight.png")
-  ggsave(weight_plot_filename, plot = weight_plot, width = 8, height = 6, dpi = 300)
-
-  # Plot for Total Value
-  value_plot <- ggplot(species_data, aes(x = Year, y = Pred_Total_Value, color = Scenario)) +
-    geom_line(size = 1) +
-    labs(title = paste("Projected Value for", species_name),
-         x = "Year", y = "Total Value ($)") +
-    theme_minimal() +
-    theme(legend.position = "bottom")
-
-  # Save Total Value plot
-  value_plot_filename <- paste0(output_dir, "/", gsub(" ", "_", species_name), "_Total_Value.png")
-  ggsave(value_plot_filename, plot = value_plot, width = 8, height = 6, dpi = 300)
-
-  cat("Saved plots for:", species_name, "\n")
-}
-
-```
-
-### Predict Lobster Landings by County
 
 ```{r}
-# Define base output directory
-base_output_dir <- "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/County_Plots"
+# Predict Landings (Total_weight) using environmental parameters and Maine Population
+# sea level rise
+# portland precipitation
+# portland temperature
+# NAO Index
+# State Population
 
-# Ensure the base directory exists
+#predict US Consumption using civillian population and landings
+
+# predict US exports from Maine using consumption, landings
+
+# predict market value using GDP, Annual Change, Per capita, total_weight, consumption, and exports
+
+# Predict total value or Maine Blue Economy using market value and total_weight
+# Define full path for output directory
+base_output_dir <- "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/Plots"
+
+# Ensure base output directory exists
 if (!dir.exists(base_output_dir)) {
   dir.create(base_output_dir, recursive = TRUE)
+  cat("Created base directory:", base_output_dir, "\n")
 }
 
-# Get unique counties
-county_list <- unique(interpolated_data$County)
-county_forecasts <- list()
+# Load dataset
+df <- interpolated_data
 
-# Iterate through counties to generate forecasts
-for (county_name in county_list) {
-  cat("\nProcessing County:", county_name, "\n")
+# Function to sanitize species names for file/folder use
+sanitize_name <- function(name) {
+  name %>%
+    str_replace_all("[^A-Za-z0-9]", "_") %>%  # Replace special characters with underscores
+    str_trim()  # Trim extra spaces
+}
 
-  # Define county-specific output directory
-  county_dir <- paste0(base_output_dir, "/", gsub(" ", "_", county_name))
+# Get sanitized species list
+species_list <- unique(df$species)
+
+# Iterate through each species
+for (species_name in species_list) {
   
-  # Ensure county directory exists
-  if (!dir.exists(county_dir)) {
-    dir.create(county_dir, recursive = TRUE)
+  cat("Processing:", species_name, "\n")
+
+  # Create a sanitized directory name
+  species_folder_name <- sanitize_name(species_name)
+  species_output_dir <- file.path(base_output_dir, species_folder_name)
+  
+  if (!dir.exists(species_output_dir)) {
+    dir.create(species_output_dir, recursive = TRUE)
   }
 
-  # Filter data for the county
-  county_data <- interpolated_data %>%
-    filter(County == county_name, Year <= 2019) %>%
-    select(Year, Lobster_Pounds, Lobster_Value, Mean_Sea_Level_m, Annual_Temp, Annual_Precip) %>%
-    arrange(Year)
+  # Filter data for the current species
+  df_species <- df %>% filter(species == species_name)
 
-  # Skip counties with no data
-  if (nrow(county_data) == 0) next  
+  # Ensure enough data points exist for training
+  if (nrow(df_species) < 10) {
+    cat("Skipping", species_name, "- Not enough data\n")
+    next
+  }
 
-  # Fill missing values using interpolation
-  county_data <- county_data %>%
-    mutate(across(c(Lobster_Pounds, Lobster_Value, Mean_Sea_Level_m, Annual_Temp, Annual_Precip), ~ na.fill(., "extend")))
+  # 🔹 Train Landings Model
+  landings_data <- df_species %>%
+    dplyr::select(Total_Weight_kg, Mean_Sea_Level_m, Portland_Annual_Precip, 
+                  Portland_Annual_Temp, Annual_NAO, State_Population)
 
-  # Create time series objects
-  ts_lobster_pounds <- ts(county_data$Lobster_Pounds, start = min(county_data$Year), frequency = 1)
-  ts_lobster_value <- ts(county_data$Lobster_Value, start = min(county_data$Year), frequency = 1)
+  set.seed(123)
+  trainIndex <- createDataPartition(landings_data$Total_Weight_kg, p = 0.8, list = FALSE)
+  train <- landings_data[trainIndex, ]
+  test <- landings_data[-trainIndex, ]
 
-  # Fit ARIMA models with external regressors
-  fit_lobster_pounds <- auto.arima(ts_lobster_pounds, xreg = cbind(county_data$Mean_Sea_Level_m, county_data$Annual_Temp), seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
-  fit_lobster_value <- auto.arima(ts_lobster_value, xreg = cbind(county_data$Mean_Sea_Level_m, county_data$Annual_Temp), seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
+  rf_landings <- randomForest(Total_Weight_kg ~ ., data = train, ntree = 500)
 
-  # Forecast for all future scenarios
+  # 🔹 Train Consumption Model
+  consumption_data <- df_species %>%
+    dplyr::select(Fresh.And.Frozen..Pounds., Total_Weight_kg, Civilian.Population..Millions.)
+  
+  rf_consumption <- randomForest(Fresh.And.Frozen..Pounds. ~ Total_Weight_kg + Civilian.Population..Millions.,
+                                 data = consumption_data, ntree = 500)
+
+  # 🔹 Train Exports Model
+  exports_data <- df_species %>%
+    dplyr::select(Fishery_Exports, Total_Weight_kg, Fresh.And.Frozen..Pounds.)
+
+  rf_exports <- randomForest(Fishery_Exports ~ Total_Weight_kg + Fresh.And.Frozen..Pounds., 
+                             data = exports_data, ntree = 500)
+
+  # 🔹 Train Market Value Model
+  market_value_data <- df_species %>%
+    dplyr::select(Avg_Market_Price, GDP..Billions.of.US..., Annual...Change, 
+                  Per.Capita..US..., Total_Weight_kg, Fresh.And.Frozen..Pounds., Fishery_Exports)
+
+  rf_market_value <- randomForest(Avg_Market_Price ~ ., data = market_value_data, ntree = 500)
+
+  # 🔹 Train Blue Economy Model
+  blue_economy_data <- df_species %>%
+    dplyr::select(Total_Value, Avg_Market_Price, Total_Weight_kg)
+
+  rf_blue_economy <- randomForest(Total_Value ~ Avg_Market_Price + Total_Weight_kg, 
+                                  data = blue_economy_data, ntree = 500)
+
+  # 🔹 Iterate Through Climate Scenarios
+  scenario_results <- list()
+
   for (scenario_name in names(future_scenarios)) {
-    scenario_data <- future_scenarios[[scenario_name]]
+    
+    future_df <- future_scenarios[[scenario_name]]
+    
+    # Predict Future Landings
+    future_df$Predicted_Landings <- predict(rf_landings, newdata = future_df)
+    future_df$Total_Weight_kg <- future_df$Predicted_Landings  
+    
+    # Predict Future Consumption
+    future_df$Predicted_Consumption <- predict(rf_consumption, newdata = future_df)
 
-    # Forecast future lobster landings and value
-    forecast_lobster_pounds <- forecast(fit_lobster_pounds, xreg = cbind(scenario_data$Mean_Sea_Level_m, scenario_data$Annual_Temp), h = length(future_years))
-    forecast_lobster_value <- forecast(fit_lobster_value, xreg = cbind(scenario_data$Mean_Sea_Level_m, scenario_data$Annual_Temp), h = length(future_years))
+    # Predict Future Exports
+    future_df$Predicted_Exports <- predict(rf_exports, newdata = future_df)
+
+    # Predict Future Market Value
+    future_df$Predicted_Market_Value <- predict(rf_market_value, newdata = future_df)
+
+    # Predict Future Blue Economy Value
+    future_df$Predicted_Blue_Economy_Value <- predict(rf_blue_economy, newdata = future_df)
 
     # Store results
-    county_forecasts[[paste(county_name, scenario_name, sep = "_")]] <- data.frame(
-      Year = future_years,
-      Scenario = scenario_name,
-      County = county_name,
-      Pred_Lobster_Pounds = forecast_lobster_pounds$mean,
-      Pred_Lobster_Value = forecast_lobster_value$mean
-    )
+    scenario_results[[scenario_name]] <- future_df
+  }
+
+  # Combine results into a single dataframe
+  results_df <- bind_rows(scenario_results, .id = "Scenario")
+
+  # 🔹 Save Multiple Plots for Each Species in Its Own Directory
+  plot_types <- list(
+    "Total_Weight_kg" = "Maine Total Landings (kg)",
+    "Predicted_Exports" = "Fishery Exports ($)",
+    "Predicted_Market_Value" = "Market Value ($)",
+    "Predicted_Blue_Economy_Value" = "Maine Blue Economy Value ($)"
+  )
+
+  for (col_name in names(plot_types)) {
+    plot_title <- paste(plot_types[[col_name]], "Projection for", species_name)
+    sanitized_col_name <- sanitize_name(col_name)
+    plot_file <- file.path(species_output_dir, paste0(species_folder_name, "_", sanitized_col_name, "_Projection.png"))
+
+    p <- ggplot(results_df, aes(x = Year, y = !!sym(col_name), color = Scenario)) +
+      geom_line(size = 1.2) +
+      ggtitle(plot_title) +
+      xlab("Year") + ylab(plot_types[[col_name]]) +
+      theme_minimal()
+
+    ggsave(plot_file, plot = p, width = 8, height = 5)
+
+    cat("Saved plot:", plot_file, "\n")
   }
 }
-
-# Combine all forecasts into one dataframe
-final_county_forecast <- bind_rows(county_forecasts)
-
-# Iterate through counties to create and save individual plots
-for (county_name in county_list) {
-  county_data <- final_county_forecast %>% filter(County == county_name)
-
-  # Define county-specific output directory
-  county_dir <- paste0(base_output_dir, "/", gsub(" ", "_", county_name))
-
-  # Plot for Lobster Pounds
-  pounds_plot <- ggplot(county_data, aes(x = Year, y = Pred_Lobster_Pounds, color = Scenario)) +
-    geom_line(size = 1) +
-    labs(title = paste("Projected Lobster Landings for", county_name),
-         x = "Year", y = "Lobster Pounds") +
-    theme_minimal() +
-    theme(legend.position = "bottom")
-
-  # Save Lobster Pounds plot
-  pounds_plot_filename <- paste0(county_dir, "/", gsub(" ", "_", county_name), "_Lobster_Pounds.png")
-  ggsave(pounds_plot_filename, plot = pounds_plot, width = 8, height = 6, dpi = 300)
-
-  # Plot for Lobster Value
-  value_plot <- ggplot(county_data, aes(x = Year, y = Pred_Lobster_Value, color = Scenario)) +
-    geom_line(size = 1) +
-    labs(title = paste("Projected Lobster Value for", county_name),
-         x = "Year", y = "Lobster Value ($)") +
-    theme_minimal() +
-    theme(legend.position = "bottom")
-
-  # Save Lobster Value plot
-  value_plot_filename <- paste0(county_dir, "/", gsub(" ", "_", county_name), "_Lobster_Value.png")
-  ggsave(value_plot_filename, plot = value_plot, width = 8, height = 6, dpi = 300)
-
-  # Save county-specific results as CSV
-  county_csv_filename <- paste0(county_dir, "/", gsub(" ", "_", county_name), "_Forecast_Results.csv")
-  write.csv(county_data, county_csv_filename, row.names = FALSE)
-
-  cat("Saved plots and results for:", county_name, "\n")
-}
-
-# Save final dataset for all counties
-write.csv(final_county_forecast, "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/county_forecast_results.csv", row.names = FALSE)
-
 
 ```
 

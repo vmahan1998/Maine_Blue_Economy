@@ -18,7 +18,7 @@ rm(list = ls())  # Clears all objects from the environment
 
 # Load necessary libraries
 library(tidyverse)
-library(forecast)
+library(randomForest)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
@@ -959,7 +959,7 @@ baseline_sea_levels <- predict(slr_model, newdata = data.frame(Year = future_yea
 
 # IPCC AR6-Based Sea Level Rise Adjustments
 low_slr <- baseline_sea_levels + (0.11 * ((future_years - 2020) / (2040 - 2020))^2)  # SSP1-2.6 (~0.44m by 2100)
-moderate_slr <- baseline_sea_levels + (0.15 * ((future_years - 2020) / (2040 - 2020))^2)  # SSP2-4.5 (~0.60m by 2100)
+moderate_slr <- baseline_sea_levels + (0.15 * ((future_years - 2020) / (2040 - 2025))^2)  # SSP2-4.5 (~0.60m by 2100)
 high_slr <- baseline_sea_levels + (0.25 * ((future_years - 2020) / (2040 - 2020))^2)  # SSP5-8.5 (~1.0m by 2100)
 
 # Create DataFrame for SLR Scenarios
@@ -1013,7 +1013,7 @@ belfast_baseline_temp <- predict(belfast_temp_model, newdata = data.frame(Year =
 
 # IPCC AR6-Based Temperature Adjustments
 belfast_low_temp <- belfast_baseline_temp + (0.45 * ((future_years - 2020) / (2040 - 2020)))  # SSP1-2.6 (~1.8°C increase by 2100)
-belfast_moderate_temp <- belfast_baseline_temp + (0.675 * ((future_years - 2020) / (2040 - 2020)))  # SSP2-4.5 (~2.7°C increase by 2100)
+belfast_moderate_temp <- belfast_baseline_temp + (0.675 * ((future_years - 2020) / (2040 - 2025)))  # SSP2-4.5 (~2.7°C increase by 2100)
 belfast_high_temp <- belfast_baseline_temp + (1.1 * ((future_years - 2020) / (2040 - 2020)))  # SSP5-8.5 (~4.4°C increase by 2100)
 
 # Create DataFrame for Temperature Scenarios
@@ -1328,43 +1328,129 @@ for (species_name in species_list) {
   landings_data <- df_species %>%
     dplyr::select(Total_Weight_kg, Mean_Sea_Level_m, Portland_Annual_Precip, 
                   Portland_Annual_Temp, Belfast_Annual_Precip, Belfast_Annual_Temp, 
-                  Moosehead_Annual_Precip, Moosehead_Annual_Temp, Gardiner_Annual_Precip, 
-                  Gardiner_Annual_Temp, Augusta_Annual_Precip, Augusta_Annual_Temp, 
-                  Annual_NAO, State_Population)
+                  Gardiner_Annual_Precip, Gardiner_Annual_Temp, Augusta_Annual_Precip,
+                  Augusta_Annual_Temp, Annual_NAO, State_Population)
 
   set.seed(123)
   trainIndex <- createDataPartition(landings_data$Total_Weight_kg, p = 0.8, list = FALSE)
-  train <- landings_data[trainIndex, ]
-  test <- landings_data[-trainIndex, ]
+  train_landings <- landings_data[trainIndex, ]
+  test_landings <- landings_data[-trainIndex, ]
 
-  rf_landings <- randomForest(Total_Weight_kg ~ ., data = train, ntree = 500)
-
+  rf_landings <- randomForest(Total_Weight_kg ~ ., data = train_landings, ntree = 1000)
+  
   # 🔹 Train Consumption Model
   consumption_data <- df_species %>%
-    dplyr::select(Total..Pounds., Total_Weight_kg, Civilian.Population..Millions., 
-                  Cured..Pounds., Canned..Pounds., Fresh.And.Frozen..Pounds.)
+    dplyr::select(Total..Pounds., Total_Weight_kg, Civilian.Population..Millions., State_Population)
   
-  rf_consumption <- randomForest(Total..Pounds. ~ ., data = consumption_data, ntree = 500)
-
+  trainIndex <- createDataPartition(consumption_data$Total..Pounds., p = 0.8, list = FALSE)
+  train_consumption <- consumption_data[trainIndex, ]
+  test_consumption <- consumption_data[-trainIndex, ]
+  
+  rf_consumption <- randomForest(Total..Pounds. ~ ., data = consumption_data, ntree = 1000)
+  
   # 🔹 Train Exports Model
   exports_data <- df_species %>%
     dplyr::select(Fishery_Exports, Total_Weight_kg, Total..Pounds.)
 
-  rf_exports <- randomForest(Fishery_Exports ~ ., data = exports_data, ntree = 500)
+  rf_exports <- randomForest(Fishery_Exports ~ ., data = exports_data, ntree = 1000)
 
+  trainIndex <- createDataPartition(exports_data$Fishery_Exports, p = 0.8, list = FALSE)
+  train_exports <- exports_data[trainIndex, ]
+  test_exports <- exports_data[-trainIndex, ]
+  
   # 🔹 Train Market Value Model
   market_value_data <- df_species %>%
     dplyr::select(Avg_Market_Price, GDP..Billions.of.US..., Annual...Change, 
-                  Per.Capita..US..., Total_Weight_kg, Total..Pounds., Fishery_Exports)
-
-  rf_market_value <- randomForest(Avg_Market_Price ~ ., data = market_value_data, ntree = 500)
+                  Per.Capita..US..., Total_Weight_kg, Total..Pounds.)
+  
+  trainIndex <- createDataPartition(market_value_data$Avg_Market_Price, p = 0.8, list = FALSE)
+  train_market_value <- market_value_data[trainIndex, ]
+  test_market_value <- market_value_data[-trainIndex, ]
+  
+  rf_market_value <- randomForest(Avg_Market_Price ~ ., data = market_value_data, ntree = 1000)
 
   # 🔹 Train Blue Economy Model
   blue_economy_data <- df_species %>%
-    dplyr::select(Total_Value, Avg_Market_Price, Total_Weight_kg, Fishery_Exports)
+    dplyr::select(Total_Value, Avg_Market_Price, Total_Weight_kg)
 
-  rf_blue_economy <- randomForest(Total_Value ~ ., data = blue_economy_data, ntree = 500)
+  rf_blue_economy <- randomForest(Total_Value ~ ., data = blue_economy_data, ntree = 1000)
 
+  # Evaluate Models
+  
+  # Define function for model evaluation
+  evaluate_model <- function(model, train_data, test_data, target_var, model_name) {
+  
+  # Predictions
+  pred_train <- predict(model, newdata = train_data)
+  pred_test <- predict(model, newdata = test_data)
+  
+  # Compute RMSE
+  rmse_train <- RMSE(pred_train, train_data[[target_var]])
+  rmse_test <- RMSE(pred_test, test_data[[target_var]])
+  
+  # Compute R²
+  r2_test <- postResample(pred_test, test_data[[target_var]])[2]
+  r2_train <- postResample(pred_train, train_data[[target_var]])[2]
+  
+  # Save results to CSV
+    evaluation_results <- data.frame(
+      Model = model_name,
+      RMSE_Train = rmse_train,
+      RMSE_Test = rmse_test,
+      R2_Train = r2_train,
+      R2_Test = r2_test
+    )
+    
+    eval_csv_file <- file.path(species_output_dir, "Model_Evaluation.csv")
+    
+    if (!file.exists(eval_csv_file)) {
+      write.csv(evaluation_results, eval_csv_file, row.names = FALSE)
+    } else {
+      write.table(evaluation_results, eval_csv_file, sep = ",", col.names = !file.exists(eval_csv_file), append = TRUE, row.names = FALSE)
+    }
+    # Print Results
+  cat(model_name, "- RMSE (Train):", rmse_train, " | RMSE (Test):", rmse_test, "\n")
+  cat(model_name, "- R² (Train):", r2_train, " | R² (Test):", r2_test, "\n")
+  
+  # Feature Importance
+  importance_values <- importance(model)
+  print(paste(model_name, "Feature Importance:"))
+  print(importance_values)
+  
+  # Cross-Validation
+  cv_control <- trainControl(method = "cv", number = 5)
+  cv_model <- train(as.formula(paste(target_var, "~ .")), data = train_data, method = "rf", trControl = cv_control)
+  print(paste(model_name, "Cross-Validation Results:"))
+  print(cv_model)
+  
+  # Hyperparameter Tuning
+  cat("Tuning hyperparameters for", model_name, "...\n")
+  tuneRF(train_data[, -which(names(train_data) == target_var)], train_data[[target_var]], stepFactor = 1.5, improve = 0.01)
+  
+  # Save Performance Plot
+  plot_data <- data.frame(
+    Actual = test_data[[target_var]],
+    Predicted = pred_test
+  )
+  
+  plot_file <- file.path(species_output_dir, paste0(model_name, "_Performance.png"))
+  
+  p <- ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+    geom_point() +
+    geom_abline(color = "red", linetype = "dashed") +
+    ggtitle(paste(model_name, "Predicted vs Actual")) +
+    xlab("Actual Values") + ylab("Predicted Values") +
+    theme_minimal()
+  
+  ggsave(plot_file, plot = p, width = 8, height = 5)
+  cat("Saved performance plot for", model_name, ":", plot_file, "\n")
+}
+  # 🔹 **Evaluate Each Model**
+  evaluate_model(rf_landings, train_landings, test_landings, "Total_Weight_kg", "Landings Model")
+  evaluate_model(rf_consumption, train_consumption, test_consumption, "Total..Pounds.", "Consumption Model")
+  evaluate_model(rf_exports, train_exports, test_exports, "Fishery_Exports", "Exports Model")
+  evaluate_model(rf_market_value, train_market_value, test_market_value, "Avg_Market_Price", "Market Value Model")
+  
   # 🔹 Iterate Through Climate & Population Scenarios
   scenario_results <- list()
 
@@ -1408,6 +1494,34 @@ for (species_name in species_list) {
   if (any(results_df$Total_Weight_kg <= 0, na.rm = TRUE)) {
     zero_landings_species[[species_name]] <- results_df %>% filter(Total_Weight_kg <= 0)
   }
+
+   # 🔹 Plot Market Value, Landings, and Blue Economy Value with a Line for Each Scenario
+  market_value_plot <- ggplot(results_df, aes(x = Year, y = Predicted_Market_Value, color = Scenario)) +
+    geom_line(size = 1.2) +
+    ggtitle(paste("Market Value Projection for", species_name)) +
+    xlab("Year") + ylab("Market Value ($/kg)") +
+    xlim(2025, 2040) +  # Limit x-axis range
+    theme_minimal()
+
+  ggsave(file.path(species_output_dir, "Market_Value.png"), plot = market_value_plot, width = 8, height = 5)
+
+  landings_plot <- ggplot(results_df, aes(x = Year, y = Total_Weight_kg, color = Scenario)) +
+    geom_line(size = 1.2) +
+    ggtitle(paste("Landings Projection for", species_name)) +
+    xlab("Year") + ylab("Total Weight (kg)") +
+    xlim(2025, 2040) +  # Limit x-axis range
+    theme_minimal()
+
+  ggsave(file.path(species_output_dir, "Landings.png"), plot = landings_plot, width = 8, height = 5)
+
+  blue_economy_plot <- ggplot(results_df, aes(x = Year, y = Predicted_Blue_Economy_Value, color = Scenario)) +
+    geom_line(size = 1.2) +
+    ggtitle(paste("Blue Economy Projection for", species_name)) +
+    xlab("Year") + ylab("Total Economic Value ($)") +
+    xlim(2025, 2040) +  # Limit x-axis range
+    theme_minimal()
+
+  ggsave(file.path(species_output_dir, "Blue_Economy.png"), plot = blue_economy_plot, width = 8, height = 5)
 }
 
 # 🔹 Save All Species Forecasts to One Master File
@@ -1425,11 +1539,12 @@ if (length(zero_landings_species) > 0) {
 } else {
   cat("No species found with zero or negative landings.\n")
 }
-
+  
 ```
 
+
 ```{r}
-# Define base directory where results are stored
+# Define base directory
 base_output_dir <- "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/Plots"
 
 # Initialize lists to store aggregated results
@@ -1438,11 +1553,11 @@ zero_landings_species <- list()
 
 # Iterate through species directories
 species_dirs <- list.dirs(base_output_dir, recursive = FALSE)
-
+print(species_dirs)
 for (species_dir in species_dirs) {
   
   # Identify CSV file
-  csv_file <- list.files(species_dir, pattern = "_Forecasts.csv$", full.names = TRUE)
+  csv_file <- list.files(species_dir, pattern = "Forecasts.csv$", full.names = TRUE)
   
   if (length(csv_file) == 0) {
     next  # Skip if no CSV file exists
@@ -1467,21 +1582,67 @@ for (species_dir in species_dirs) {
 # Combine all species' results into a single dataframe
 combined_results <- bind_rows(all_results, .id = "Species")
 
-# 🔹 Compute Maine’s Net Blue Economy Value (Total_Value summed across species)
-maine_blue_economy <- combined_results %>%
+# 🔹 **Aggregate Total Landings Across All Species Per Year Per Scenario**
+total_landings_by_scenario <- combined_results %>%
+  group_by(Year, Scenario) %>%
+  summarise(
+    Total_Aggregated_Landings = sum(Total_Weight_kg, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Save total landings per scenario
+total_landings_csv <- file.path(base_output_dir, "Maine_Total_Aggregated_Landings_By_Scenario.csv")
+write.csv(total_landings_by_scenario, total_landings_csv, row.names = FALSE)
+cat("Saved total aggregated landings per scenario:", total_landings_csv, "\n")
+
+# 🔹 Aggregate **Total_Weight_kg** by **Scenario and Species**
+maine_landings_by_species_scenario <- combined_results %>%
+  group_by(Scenario, Species) %>%
+  summarise(
+    Total_Landings_kg = sum(Total_Weight_kg, na.rm = TRUE)
+  ) %>%
+  arrange(Scenario, desc(Total_Landings_kg))
+
+# Save species-based landings data
+maine_landings_by_species_csv <- file.path(base_output_dir, "Maine_Total_Landings_By_Species_By_Scenario.csv")
+write.csv(maine_landings_by_species_scenario, maine_landings_by_species_csv, row.names = FALSE)
+cat("Saved total landings by species per scenario:", maine_landings_by_species_csv, "\n")
+
+# 🔹 Identify **Top 5 and Bottom 5 Species for Landings per Scenario**
+top_5_species_scenario <- maine_landings_by_species_scenario %>%
+  group_by(Scenario) %>%
+  top_n(5, Total_Landings_kg) %>%
+  arrange(Scenario, desc(Total_Landings_kg))
+
+bottom_5_species_scenario <- maine_landings_by_species_scenario %>%
+  group_by(Scenario) %>%
+  top_n(-5, Total_Landings_kg) %>%
+  arrange(Scenario, Total_Landings_kg)
+
+# Save ranked lists
+top_species_csv <- file.path(base_output_dir, "Top_5_Species_Landings_By_Scenario.csv")
+write.csv(top_5_species_scenario, top_species_csv, row.names = FALSE)
+cat("Saved top 5 species by landings per scenario:", top_species_csv, "\n")
+
+bottom_species_csv <- file.path(base_output_dir, "Bottom_5_Species_Landings_By_Scenario.csv")
+write.csv(bottom_5_species_scenario, bottom_species_csv, row.names = FALSE)
+cat("Saved bottom 5 species by landings per scenario:", bottom_species_csv, "\n")
+
+# 🔹 Compute Maine’s Net Blue Economy Value **for Each Scenario**
+maine_blue_economy_by_scenario <- combined_results %>%
   group_by(Year, Scenario) %>%
   summarise(
     Net_Blue_Economy_Value = sum(Predicted_Blue_Economy_Value, na.rm = TRUE)
   ) %>%
   ungroup()
 
-# Save Maine's Net Blue Economy Value
-maine_blue_economy_csv <- file.path(base_output_dir, "Maine_Net_Blue_Economy.csv")
-write.csv(maine_blue_economy, maine_blue_economy_csv, row.names = FALSE)
-cat("Saved Maine's Net Blue Economy Potential:", maine_blue_economy_csv, "\n")
+# Save scenario-specific Maine's Net Blue Economy Value
+maine_blue_economy_csv <- file.path(base_output_dir, "Maine_Net_Blue_Economy_By_Scenario.csv")
+write.csv(maine_blue_economy_by_scenario, maine_blue_economy_csv, row.names = FALSE)
+cat("Saved Maine's Net Blue Economy Potential per scenario:", maine_blue_economy_csv, "\n")
 
-# Aggregate US Exports and Consumption per Year
-aggregated_results <- combined_results %>%
+# 🔹 Aggregate US Exports and Consumption per Scenario
+aggregated_results_by_scenario <- combined_results %>%
   group_by(Year, Scenario) %>%
   summarise(
     Mean_Exports = mean(Predicted_Exports, na.rm = TRUE),
@@ -1489,10 +1650,10 @@ aggregated_results <- combined_results %>%
   ) %>%
   ungroup()
 
-# Save aggregated results
-aggregated_csv_file <- file.path(base_output_dir, "Aggregated_Exports_Consumption.csv")
-write.csv(aggregated_results, aggregated_csv_file, row.names = FALSE)
-cat("Saved aggregated results:", aggregated_csv_file, "\n")
+# Save scenario-specific aggregated results
+aggregated_csv_file <- file.path(base_output_dir, "Aggregated_Exports_Consumption_By_Scenario.csv")
+write.csv(aggregated_results_by_scenario, aggregated_csv_file, row.names = FALSE)
+cat("Saved aggregated exports & consumption by scenario:", aggregated_csv_file, "\n")
 
 # Save species with zero/negative landings
 zero_landings_file <- file.path(base_output_dir, "Species_Zero_Landings.csv")
@@ -1505,86 +1666,111 @@ if (length(zero_landings_species) > 0) {
   cat("No species found with zero or negative landings.\n")
 }
 
-# 🔹 Plot Maine's Net Blue Economy Value
-maine_blue_economy_plot <- ggplot(maine_blue_economy, aes(x = Year, y = Net_Blue_Economy_Value, color = Scenario)) +
+# 🔹 **Plot Total Landings Across All Species per Scenario**
+total_landings_plot <- ggplot(total_landings_by_scenario, aes(x = Year, y = Total_Aggregated_Landings, color = Scenario)) +
   geom_line(size = 1.2) +
-  ggtitle("Projected Net Blue Economy Potential for Maine") +
+  ggtitle("Total Landings Across All Species by Scenario") +
+  xlab("Year") + ylab("Total Landings (kg)") +
+  xlim(2025, 2040) +  # Limit x-axis range
+  theme_minimal()
+
+total_landings_plot_file <- file.path(base_output_dir, "Total_Landings_Aggregated_By_Scenario.png")
+ggsave(total_landings_plot_file, plot = total_landings_plot, width = 10, height = 6)
+cat("Saved total landings plot by scenario:", total_landings_plot_file, "\n")
+
+# 🔹 Extract Trends for the Selected Species
+top_5_trends_scenario <- combined_results %>%
+  filter(Species %in% top_5_species_scenario$Species)
+
+bottom_5_trends_scenario <- combined_results %>%
+  filter(Species %in% bottom_5_species_scenario$Species)
+
+# 🔹 Plot **Top 5 Species Landings by Scenario**
+top_5_plot <- ggplot(top_5_trends_scenario, aes(x = Year, y = Total_Weight_kg, color = Species)) +
+  geom_line(size = 1.2) +
+  facet_wrap(~Scenario, scales = "free") +
+  ggtitle("Top 5 Species Landings by Scenario") +
+  xlab("Year") + ylab("Total Landings (kg)") +
+  xlim(2025, 2040) +  # Limit x-axis range
+  theme_minimal()
+
+top_5_plot_file <- file.path(base_output_dir, "Top_5_Species_Landings_By_Scenario.png")
+ggsave(top_5_plot_file, plot = top_5_plot, width = 10, height = 6)
+cat("Saved top 5 species landings plot by scenario:", top_5_plot_file, "\n")
+
+# 🔹 Plot **Bottom 5 Species Landings by Scenario**
+bottom_5_plot <- ggplot(bottom_5_trends_scenario, aes(x = Year, y = Total_Weight_kg, color = Species)) +
+  geom_line(size = 1.2) +
+  facet_wrap(~Scenario, scales = "free") +
+  ggtitle("Bottom 5 Species Landings by Scenario") +
+  xlab("Year") + ylab("Total Landings (kg)") +
+  xlim(2025, 2040) +  # Limit x-axis range
+  theme_minimal()
+
+bottom_5_plot_file <- file.path(base_output_dir, "Bottom_5_Species_Landings_By_Scenario.png")
+ggsave(bottom_5_plot_file, plot = bottom_5_plot, width = 10, height = 6)
+cat("Saved bottom 5 species landings plot by scenario:", bottom_5_plot_file, "\n")
+
+# 🔹 Plot Maine's Net Blue Economy Value for **Each Scenario**
+maine_blue_economy_plot <- ggplot(maine_blue_economy_by_scenario, aes(x = Year, y = Net_Blue_Economy_Value, color = Scenario)) +
+  geom_line(size = 1.2) +
+  ggtitle("Projected Net Blue Economy Potential for Maine by Scenario") +
   xlab("Year") + ylab("Total Value ($)") +
+  xlim(2025, 2040) +  # Limit x-axis range
   theme_minimal()
 
-maine_blue_economy_plot_file <- file.path(base_output_dir, "Maine_Net_Blue_Economy_Projection.png")
+maine_blue_economy_plot_file <- file.path(base_output_dir, "Maine_Net_Blue_Economy_By_Scenario.png")
 ggsave(maine_blue_economy_plot_file, plot = maine_blue_economy_plot, width = 8, height = 5)
-cat("Saved Maine Net Blue Economy plot:", maine_blue_economy_plot_file, "\n")
+cat("Saved Maine Net Blue Economy plot by scenario:", maine_blue_economy_plot_file, "\n")
 
-# US Exports Projection
-export_plot <- ggplot(aggregated_results, aes(x = Year, y = Mean_Exports, color = Scenario)) +
+# 🔹 US Exports Projection by Scenario
+export_plot <- ggplot(aggregated_results_by_scenario, aes(x = Year, y = Mean_Exports, color = Scenario)) +
   geom_line(size = 1.2) +
-  ggtitle("Projected US Fishery Exports") +
+  ggtitle("Projected US Fishery Exports by Scenario") +
   xlab("Year") + ylab("Mean Exports ($)") +
+  xlim(2025, 2040) +  # Limit x-axis range
   theme_minimal()
 
-export_plot_file <- file.path(base_output_dir, "Aggregated_Exports_Projection.png")
+export_plot_file <- file.path(base_output_dir, "Aggregated_Exports_By_Scenario.png")
 ggsave(export_plot_file, plot = export_plot, width = 8, height = 5)
-cat("Saved export projection plot:", export_plot_file, "\n")
+cat("Saved export projection plot by scenario:", export_plot_file, "\n")
 
-# US Consumption Projection
-consumption_plot <- ggplot(aggregated_results, aes(x = Year, y = Mean_Consumption, color = Scenario)) +
+# 🔹 US Consumption Projection by Scenario
+consumption_plot <- ggplot(aggregated_results_by_scenario, aes(x = Year, y = Mean_Consumption, color = Scenario)) +
   geom_line(size = 1.2) +
-  ggtitle("Projected US Fishery Consumption") +
+  ggtitle("Projected US Fishery Consumption by Scenario") +
   xlab("Year") + ylab("Mean Consumption (Pounds)") +
+  xlim(2025, 2040) +  # Limit x-axis range
   theme_minimal()
 
-consumption_plot_file <- file.path(base_output_dir, "Aggregated_Consumption_Projection.png")
+consumption_plot_file <- file.path(base_output_dir, "Aggregated_Consumption_By_Scenario.png")
 ggsave(consumption_plot_file, plot = consumption_plot, width = 8, height = 5)
-cat("Saved consumption projection plot:", consumption_plot_file, "\n")
+cat("Saved consumption projection plot by scenario:", consumption_plot_file, "\n")
 ```
 
 ### Which Species is Contributing the Most or the Least?
 
 ```{r}
-# Define base directory
-base_output_dir <- "C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Clean Data/Plots"
-
 # Initialize list to store results
 all_species_results <- list()
 
 # Iterate through species directories
+species_dirs <- list.dirs(base_output_dir, recursive = FALSE)
+
 for (species_dir in species_dirs) {
-  
-  # Debug: Print the species directory being processed
-  cat("Processing directory:", species_dir, "\n")
   
   # Identify CSV file
   csv_file <- list.files(species_dir, pattern = "Forecasts.csv$", full.names = TRUE)
   
-  # Debug: Print the detected CSV file
   if (length(csv_file) == 0) {
-    cat("No Forecasts.csv found in", species_dir, "\n")
     next  # Skip if no CSV file exists
-  } else {
-    cat("Found file:", csv_file, "\n")
   }
   
   # Read the forecasted data
-  species_results <- tryCatch(
-    {
-      read.csv(csv_file)
-    },
-    error = function(e) {
-      cat("Error reading:", csv_file, "\nError message:", e$message, "\n")
-      return(NULL)  # Skip if there's an error
-    }
-  )
-  
-  if (is.null(species_results)) {
-    next  # Skip this iteration if the file couldn't be read
-  }
+  species_results <- read.csv(csv_file)
   
   # Extract species name from directory
   species_name <- basename(species_dir)
-  
-  # Debug: Print species name
-  cat("Processing species:", species_name, "\n")
   
   # Add species name column
   species_results$Species <- species_name
@@ -1596,179 +1782,229 @@ for (species_dir in species_dirs) {
 # Combine all species' results into a single dataframe
 combined_results <- bind_rows(all_species_results)
 
-# 🔹 Identify the top species contributing to Maine's Blue Economy
-species_total_value <- combined_results %>%
-  group_by(Species) %>%
-  summarise(Total_Economic_Contribution = sum(Predicted_Blue_Economy_Value, na.rm = TRUE)) %>%
-  arrange(desc(Total_Economic_Contribution))
+# 🔹 Compute **Total Economic Contribution Per Species Per Year for Each Scenario**
+species_total_value_by_year_scenario <- combined_results %>%
+  group_by(Year, Scenario, Species) %>%
+  summarise(Annual_Economic_Contribution = sum(Predicted_Blue_Economy_Value, na.rm = TRUE)) %>%
+  arrange(Year, Scenario, desc(Annual_Economic_Contribution))
 
-# Save the ranked list of species contributions
-species_contribution_csv <- file.path(base_output_dir, "Top_Species_Economic_Contribution.csv")
-write.csv(species_total_value, species_contribution_csv, row.names = FALSE)
-cat("Saved species economic contribution ranking:", species_contribution_csv, "\n")
+# Compute **Percent Change in Economic Contribution Over Time**
+species_total_value_by_year_scenario <- species_total_value_by_year_scenario %>%
+  group_by(Scenario, Species) %>%
+  arrange(Year) %>%
+  mutate(Percent_Change = (Annual_Economic_Contribution - lag(Annual_Economic_Contribution)) / lag(Annual_Economic_Contribution) * 100)
 
-# 🔹 Identify top species contributing per year
-top_species_by_year <- combined_results %>%
-  group_by(Year, Species) %>%
-  summarise(Annual_Contribution = sum(Predicted_Blue_Economy_Value, na.rm = TRUE)) %>%
-  arrange(Year, desc(Annual_Contribution))
+# Save the **yearly species contribution ranking per scenario**
+species_contribution_yearly_csv <- file.path(base_output_dir, "Species_Economic_Contribution_By_Year_By_Scenario.csv")
+write.csv(species_total_value_by_year_scenario, species_contribution_yearly_csv, row.names = FALSE)
+cat("Saved species economic contribution per year by scenario:", species_contribution_yearly_csv, "\n")
 
-# Save yearly ranking of species contributions
-species_yearly_contribution_csv <- file.path(base_output_dir, "Top_Species_Economic_Contribution_Per_Year.csv")
-write.csv(top_species_by_year, species_yearly_contribution_csv, row.names = FALSE)
-cat("Saved top species economic contribution per year:", species_yearly_contribution_csv, "\n")
+# 🔹 Identify **Top 5 and Bottom 5 Species for Each Scenario**
+species_total_contribution_scenario <- species_total_value_by_year_scenario %>%
+  group_by(Species, Scenario) %>%
+  summarise(Total_Contribution = sum(Annual_Economic_Contribution, na.rm = TRUE)) %>%
+  arrange(Scenario, desc(Total_Contribution))
 
-# 🔹 Compute the percentage change in contribution over time
-species_trends <- combined_results %>%
-  group_by(Species, Year) %>%
-  summarise(Total_Contribution = sum(Predicted_Blue_Economy_Value, na.rm = TRUE)) %>%
-  arrange(Species, Year) %>%
-  group_by(Species) %>%
-  mutate(Percent_Change = (Total_Contribution - lag(Total_Contribution)) / lag(Total_Contribution) * 100)
+top_5_species_scenario <- species_total_contribution_scenario %>%
+  group_by(Scenario) %>%
+  slice_max(order_by = Total_Contribution, n = 5)
 
-# Save species trends over time
-species_trends_csv <- file.path(base_output_dir, "Species_Economic_Trend.csv")
-write.csv(species_trends, species_trends_csv, row.names = FALSE)
-cat("Saved species economic trend over time:", species_trends_csv, "\n")
+bottom_5_species_scenario <- species_total_contribution_scenario %>%
+  group_by(Scenario) %>%
+  slice_min(order_by = Total_Contribution, n = 5)
 
-# 🔹 Identify Top 10 and Bottom 10 Species
-species_total_contribution <- species_trends %>%
-  group_by(Species) %>%
-  summarise(Total_Contribution = sum(Total_Contribution, na.rm = TRUE)) %>%
-  arrange(desc(Total_Contribution))
+# 🔹 Extract Trends for the Selected Species in Each Scenario
+top_5_trends_scenario <- species_total_value_by_year_scenario %>% 
+  filter(Species %in% top_5_species_scenario$Species)
 
-top_10_species <- species_total_contribution %>% head(10) %>% pull(Species)
-bottom_10_species <- species_total_contribution %>% tail(10) %>% pull(Species)
+bottom_5_trends_scenario <- species_total_value_by_year_scenario %>% 
+  filter(Species %in% bottom_5_species_scenario$Species)
 
-top_10_trends <- species_trends %>% filter(Species %in% top_10_species)
-bottom_10_trends <- species_trends %>% filter(Species %in% bottom_10_species)
-
-# 🔹 Plot Top 10 Species
-top_10_plot <- ggplot(top_10_trends, aes(x = Year, y = Total_Contribution, color = Species)) +
+# 🔹 Plot **Top 5 Species Contributions Over Time** by Scenario
+top_5_plot <- ggplot(top_5_trends_scenario, aes(x = Year, y = Annual_Economic_Contribution, color = Species)) +
   geom_line(size = 1.2) +
-  ggtitle("Top 10 Species Contribution to Maine's Blue Economy") +
-  xlab("Year") + ylab("Total Value ($)") +
-  theme_minimal()
+  facet_wrap(~Scenario, scales = "free_y") +
+  ggtitle("Top 5 Species Contribution to Maine's Blue Economy by Scenario") +
+  xlab("Year") + ylab("Total Economic Contribution ($)") +
+  xlim(2025, 2040) +  # Limit x-axis range
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12, face = "bold"))
 
-top_10_plot_file <- file.path(base_output_dir, "Top_10_Species_Contribution.png")
-ggsave(top_10_plot_file, plot = top_10_plot, width = 8, height = 5)
-cat("Saved top 10 species contribution plot:", top_10_plot_file, "\n")
+# Save the **Top 5 Contribution Plot by Scenario**
+top_5_plot_file <- file.path(base_output_dir, "Top_5_Species_Contribution_By_Scenario.png")
+ggsave(top_5_plot_file, plot = top_5_plot, width = 12, height = 6)
+cat("Saved top 5 species contribution plot by scenario:", top_5_plot_file, "\n")
 
-# 🔹 Plot Bottom 10 Species
-bottom_10_plot <- ggplot(bottom_10_trends, aes(x = Year, y = Total_Contribution, color = Species)) +
+# 🔹 Plot **Bottom 5 Species Contributions Over Time** by Scenario
+bottom_5_plot <- ggplot(bottom_5_trends_scenario, aes(x = Year, y = Annual_Economic_Contribution, color = Species)) +
   geom_line(size = 1.2) +
-  ggtitle("Bottom 10 Species Contribution to Maine's Blue Economy") +
-  xlab("Year") + ylab("Total Value ($)") +
-  theme_minimal()
+  facet_wrap(~Scenario, scales = "free_y") +
+  ggtitle("Bottom 5 Species Contribution to Maine's Blue Economy by Scenario") +
+  xlab("Year") + ylab("Total Economic Contribution ($)") +
+  xlim(2025, 2040) +  # Limit x-axis range
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12, face = "bold"))
 
-bottom_10_plot_file <- file.path(base_output_dir, "Bottom_10_Species_Contribution.png")
-ggsave(bottom_10_plot_file, plot = bottom_10_plot, width = 8, height = 5)
-cat("Saved bottom 10 species contribution plot:", bottom_10_plot_file, "\n")
+# Save the **Bottom 5 Contribution Plot by Scenario**
+bottom_5_plot_file <- file.path(base_output_dir, "Bottom_5_Species_Contribution_By_Scenario.png")
+ggsave(bottom_5_plot_file, plot = bottom_5_plot, width = 12, height = 6)
+cat("Saved bottom 5 species contribution plot by scenario:", bottom_5_plot_file, "\n")
+
+
 ```
 
+### Economic Growth by Species
+```{r}
+# Load species economic trends per scenario
+species_trends_csv <- file.path(base_output_dir, "Species_Economic_Contribution_By_Year_By_Scenario.csv")
+species_trends_scenario <- read.csv(species_trends_csv)
+
+# 🔹 Ensure correct column names
+print(colnames(species_trends_scenario))
+
+# 🔹 Compute **Average Annual Percentage Change** Per Species for Each Scenario
+species_change_scenario <- species_trends_scenario %>%
+  group_by(Scenario, Species) %>%
+  summarise(Average_Percent_Change = mean(Percent_Change, na.rm = TRUE)) %>%
+  arrange(Scenario, desc(Average_Percent_Change))  # Rank by highest increase within each scenario
+
+# Identify **Top 5 Growth and Bottom 5 Decline Species by Scenario**
+top_5_growth_species_scenario <- species_change_scenario %>%
+  group_by(Scenario) %>%
+  slice_max(order_by = Average_Percent_Change, n = 5)
+
+bottom_5_decline_species_scenario <- species_change_scenario %>%
+  group_by(Scenario) %>%
+  slice_min(order_by = Average_Percent_Change, n = 5)
+
+# 🔹 Extract Trends for the Selected Species by Scenario
+top_5_growth_trends_scenario <- species_trends_scenario %>%
+  filter(Species %in% top_5_growth_species_scenario$Species)
+
+bottom_5_decline_trends_scenario <- species_trends_scenario %>%
+  filter(Species %in% bottom_5_decline_species_scenario$Species)
+
+# 🔹 Plot **Top 5 Growing Species by Annual % Change for Each Scenario**
+top_5_growth_plot <- ggplot(top_5_growth_trends_scenario, aes(x = Year, y = Percent_Change, color = Species)) +
+  geom_line(size = 1.2) +
+  facet_wrap(~Scenario, scales = "free_y") +
+  ggtitle("Top 5 Species with Highest Annual Growth Rate by Scenario") +
+  xlab("Year") + ylab("Annual Percent Change (%)") +
+  xlim(2025, 2040) +  # Limit x-axis range
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12, face = "bold"))
+
+# Save the **Top 5 Growth Rate Plot by Scenario**
+top_5_growth_plot_file <- file.path(base_output_dir, "Top_5_Growth_Rate_Species_By_Scenario.png")
+ggsave(top_5_growth_plot_file, plot = top_5_growth_plot, width = 12, height = 6)
+cat("Saved top 5 species growth rate plot by scenario:", top_5_growth_plot_file, "\n")
+
+# 🔹 Plot **Bottom 5 Declining Species by Annual % Change for Each Scenario**
+bottom_5_decline_plot <- ggplot(bottom_5_decline_trends_scenario, aes(x = Year, y = Percent_Change, color = Species)) +
+  geom_line(size = 1.2) +
+  facet_wrap(~Scenario, scales = "free_y") +
+  ggtitle("Bottom 5 Species with Highest Decline Rate by Scenario") +
+  xlab("Year") + ylab("Annual Percent Change (%)") +
+  xlim(2025, 2040) +  # Limit x-axis range
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12, face = "bold"))
+
+# Save the **Bottom 5 Declining Rate Plot by Scenario**
+bottom_5_decline_plot_file <- file.path(base_output_dir, "Bottom_5_Declining_Rate_Species_By_Scenario.png")
+ggsave(bottom_5_decline_plot_file, plot = bottom_5_decline_plot, width = 12, height = 6)
+cat("Saved bottom 5 species decline rate plot by scenario:", bottom_5_decline_plot_file, "\n")
+
+# 🔹 Save Ranked List of Species by **Average Annual % Change for Each Scenario**
+species_change_scenario_csv <- file.path(base_output_dir, "Species_Annual_Percent_Change_By_Scenario.csv")
+write.csv(species_change_scenario, species_change_scenario_csv, row.names = FALSE)
+cat("Saved species annual percent change ranking by scenario:", species_change_scenario_csv, "\n")
+```
 
 ## Validate Model
-
-### Species
-
-## Lobster by County
 ```{r}
-lobster_validation <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/LobByCntyMoZone_2020_2024.csv",
-                   stringsAsFactors = FALSE, 
-                   check.names = TRUE, 
-                   skip = 0)  # Load all rows initially
+ # Initialize list to store all species' evaluation results
+all_evaluation_results <- list()
 
-# Set the first row as row names
-colnames(lobster_validation) <- lobster_validation[1, ]
+# Iterate through species directories
+species_dirs <- list.dirs(base_output_dir, recursive = FALSE)
 
-# Remove the first row from the dataset
-lobster_validation <- lobster_validation[-1, ]
-
-# Reset row indices
-rownames(lobster_validation) <- NULL
-
-# Convert Year column to numeric
-lobster_validation$Year <- as.numeric(lobster_validation$Year)
-
-# Convert numerical columns
-lobster_validation$Lobster_Pounds <- as.numeric(lobster_validation$Pounds)
-lobster_validation$Lobster_Value <- as.numeric(lobster_validation$Value)
-
-# Filter to keep only the baseline scenario
-# Step 1: Filter baseline scenario & relevant years
-final_county_forecast_baseline <- final_county_forecast %>%
-  filter(Scenario == "Baseline", Year >= 2020 & Year <= 2024) %>%
-  select(Year, County, Pred_Lobster_Pounds, Pred_Lobster_Value)
-
-# Step 2: Clean & Standardize County Names to Avoid Mismatches
-final_county_forecast_baseline <- final_county_forecast_baseline %>%
-  mutate(County = str_trim(County) %>% str_to_title())
-
-lobster_validation <- lobster_validation %>%
-  mutate(County = str_trim(County) %>% str_to_title())
-
-# Step 3: Perform an Inner Join to Keep Only Matching Records
-comparison_data <- inner_join(final_county_forecast_baseline, lobster_validation, by = c("Year", "County"))
-
-# Check for unmatched records
-unmatched_forecast <- setdiff(final_county_forecast_baseline$County, lobster_validation$County)
-unmatched_validation <- setdiff(lobster_validation$County, final_county_forecast_baseline$County)
-
-# Print any mismatches (if empty, then all counties matched correctly)
-print(unmatched_forecast)  # Counties in forecast but not in validation
-print(unmatched_validation)  # Counties in validation but not in forecast
-
-# Check if any rows still contain NA values
-summary(comparison_data)
-
-# Ensure the merged data keeps both predicted and observed values as separate columns
-comparison_pounds_data <- comparison_data %>%
-  select(Year, County, Pred_Lobster_Pounds, Lobster_Pounds)
-
-comparison_value_data <- comparison_data %>%
-  select(Year, County, Pred_Lobster_Value, Lobster_Value)
-
-# Unique counties
-counties <- unique(comparison_pounds_long$County)
-
-for (county in counties) {
+for (species_dir in species_dirs) {
   
-  county_data <- comparison_pounds_long %>% filter(County == county)
-  county_value_data <- comparison_value_long %>% filter(County == county)
-
-  # Assign colors and linetypes
-  unique_types <- unique(county_data$Type)
-  scenario_colors <- setNames(rainbow(length(unique_types)), unique_types) 
-  scenario_linetypes <- setNames(rep("dashed", length(unique_types)), unique_types)
-
-  # Ensure "Observed" is black and solid
-  scenario_colors["Observed"] <- "black"
-  scenario_linetypes["Observed"] <- "solid"
+  # Identify evaluation file
+  eval_file <- file.path(species_dir, "Model_Evaluation.csv")
+  
+  if (file.exists(eval_file)) {
+    
+    # Read the evaluation results
+    species_eval <- read.csv(eval_file)
+    
+    # Extract species name from directory
+    species_name <- basename(species_dir)
+    species_eval$Species <- species_name  # Add species name column
+    
+    # Store results
+    all_evaluation_results[[species_name]] <- species_eval
+  }
 }
 
-# Compute error metrics for Lobster Pounds
-mae_pounds <- mae(comparison_data$Lobster_Pounds, comparison_data$Pred_Lobster_Pounds)
-mse_pounds <- mse(comparison_data$Lobster_Pounds, comparison_data$Pred_Lobster_Pounds)
-rmse_pounds <- rmse(comparison_data$Lobster_Pounds, comparison_data$Pred_Lobster_Pounds)
-r2_pounds <- cor(comparison_data$Lobster_Pounds, comparison_data$Pred_Lobster_Pounds, use = "complete.obs")^2
+# Combine all species' results into a single dataframe
+combined_evaluation_results <- bind_rows(all_evaluation_results)
 
-# Compute error metrics for Lobster Value
-mae_value <- mae(comparison_data$Lobster_Value, comparison_data$Pred_Lobster_Value)
-mse_value <- mse(comparison_data$Lobster_Value, comparison_data$Pred_Lobster_Value)
-rmse_value <- rmse(comparison_data$Lobster_Value, comparison_data$Pred_Lobster_Value)
-r2_value <- cor(comparison_data$Lobster_Value, comparison_data$Pred_Lobster_Value, use = "complete.obs")^2
+# Save aggregated results
+evaluation_csv_file <- file.path(base_output_dir, "All_Species_Model_Evaluation.csv")
+write.csv(combined_evaluation_results, evaluation_csv_file, row.names = FALSE)
 
-# Print Error Metrics
-cat("Lobster Pounds Prediction Evaluation:\n")
-cat("MAE:", mae_pounds, "\n")
-cat("MSE:", mse_pounds, "\n")
-cat("RMSE:", rmse_pounds, "\n")
-cat("R²:", r2_pounds, "\n\n")
+cat("Saved aggregated model evaluation results:", evaluation_csv_file, "\n")
 
-cat("Lobster Value Prediction Evaluation:\n")
-cat("MAE:", mae_value, "\n")
-cat("MSE:", mse_value, "\n")
-cat("RMSE:", rmse_value, "\n")
-cat("R²:", r2_value, "\n")
+```
+
+```{r}
+# Find best (highest R²) and worst (lowest R²) performing species for each model
+top_10_species <- combined_evaluation_results %>%
+  group_by(Model) %>%
+  top_n(10, R2_Test) %>%
+  arrange(Model, desc(R2_Test))
+
+bottom_10_species <- combined_evaluation_results %>%
+  group_by(Model) %>%
+  top_n(-10, R2_Test) %>%
+  arrange(Model, R2_Test)
+
+# Save rankings
+top_10_species_csv <- file.path(base_output_dir, "Top_10_Accurate_Species_Per_Model.csv")
+bottom_10_species_csv <- file.path(base_output_dir, "Bottom_10_Accurate_Species_Per_Model.csv")
+
+write.csv(top_10_species, top_10_species_csv, row.names = FALSE)
+write.csv(bottom_10_species, bottom_10_species_csv, row.names = FALSE)
+
+cat("Saved top 10 most accurate species per model:", top_10_species_csv, "\n")
+cat("Saved bottom 10 least accurate species per model:", bottom_10_species_csv, "\n")
+```
+
+```{r}
+# Top 10 Most Accurate Species (R²)
+top_10_plot <- ggplot(top_10_species, aes(x = reorder(Species, -R2_Test), y = R2_Test, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  ggtitle("Top 10 Most Accurate Species Models (R²)") +
+  xlab("Species") + ylab("R² (Higher is Better)") +
+  theme_minimal()
+
+top_10_plot_file <- file.path(base_output_dir, "Top_10_Accurate_Species.png")
+ggsave(top_10_plot_file, plot = top_10_plot, width = 10, height = 6)
+cat("Saved top 10 most accurate species plot:", top_10_plot_file, "\n")
+
+# Bottom 10 Least Accurate Species (R²)
+bottom_10_plot <- ggplot(bottom_10_species, aes(x = reorder(Species, R2_Test), y = R2_Test, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  ggtitle("Bottom 10 Least Accurate Species Models (R²)") +
+  xlab("Species") + ylab("R² (Higher is Better)") +
+  theme_minimal()
+
+bottom_10_plot_file <- file.path(base_output_dir, "Bottom_10_Accurate_Species.png")
+ggsave(bottom_10_plot_file, plot = bottom_10_plot, width = 10, height = 6)
+cat("Saved bottom 10 least accurate species plot:", bottom_10_plot_file, "\n")
+
 ```
 

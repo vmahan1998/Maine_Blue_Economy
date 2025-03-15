@@ -1508,7 +1508,7 @@ for (species_name in species_list) {
 
   # 🔹 Train Blue Economy Model
   blue_economy_data <- df_species %>%
-    dplyr::select(Total_Value, Avg_Market_Price, Total_Weight_kg, Total..Pounds., Fishery_Exports, Mean_Sea_Level_m)
+    dplyr::select(Total_Value, Avg_Market_Price, Total_Weight_kg, Fishery_Exports, Mean_Sea_Level_m)
   
   trainIndex <- createDataPartition(blue_economy_data$Total_Value, p = 0.7, list = FALSE)
   train_blue_economy <- blue_economy_data[trainIndex, ]
@@ -2159,6 +2159,7 @@ colnames(interpolated_data)[colnames(interpolated_data) == "species"] <- "Specie
 known_top_species <- c("Lobster American", "Menhaden Atlantic", "Clam Soft", "Elver", "Seaweed Unc", "Scallop Sea", "Alewife", "Oysters", "Pollock", "Flounder Yellowtail", 
                        "Haddock", "Flounder Winter", "Mussel Blue Sea")
 
+# Subset model forecast data for selected species and baseline scenario
 selected_species_forecast <- master_results_df %>%
   filter(Species %in% known_top_species, Scenario == "Baseline")
 
@@ -2166,19 +2167,62 @@ selected_species_forecast <- master_results_df %>%
 historic_data <- interpolated_data %>%
   filter(Species %in% known_top_species) %>%
   dplyr::select(Year, Species, Total_Weight_kg, Avg_Market_Price, Total_Value) %>%
-  mutate(Data_Source = "Historic")
+  mutate(Data_Source = "Historic") %>%
+  group_by(Year, Species, Data_Source) %>%
+  summarize(across(c(Total_Weight_kg, Avg_Market_Price, Total_Value), mean, na.rm = TRUE), .groups = "drop") %>%
+  distinct(Year, Species, Data_Source, .keep_all = TRUE)  # Ensure uniqueness
 
-# Rename columns for merging
+# Prepare Model Data
 model_data <- selected_species_forecast %>%
   dplyr::select(Year, Species, Predicted_Landings, Predicted_Market_Value, Predicted_Blue_Economy_Value) %>%
   rename(Total_Weight_kg = Predicted_Landings,
          Avg_Market_Price = Predicted_Market_Value,
          Total_Value = Predicted_Blue_Economy_Value) %>%
-  mutate(Data_Source = "Projected")
+  mutate(Data_Source = "Projected") %>%
+  group_by(Year, Species, Data_Source) %>%
+  summarize(across(c(Total_Weight_kg, Avg_Market_Price, Total_Value), mean, na.rm = TRUE), .groups = "drop") %>%
+  distinct(Year, Species, Data_Source, .keep_all = TRUE)  # Ensure uniqueness
 
-# Combine datasets without gaps
+# Combine datasets
 combined_data <- bind_rows(historic_data, model_data) %>%
-  arrange(Species, Year)
+  arrange(Species, Year, Data_Source) %>%
+  distinct(Year, Species, Data_Source, .keep_all = TRUE)  # Ensure no duplicates
+
+# Generate half-year intervals for smoother plotting
+full_years <- seq(floor(min(combined_data$Year)), ceiling(max(combined_data$Year)), by = 0.5)
+expanded_data <- expand.grid(Year = full_years, Species = unique(combined_data$Species))
+
+# Merge and interpolate missing values
+combined_data <- expanded_data %>%
+  left_join(combined_data, by = c("Year", "Species")) %>%
+  group_by(Species) %>%
+  mutate(
+    Total_Weight_kg = Total_Weight_kg,
+    Avg_Market_Price = Avg_Market_Price,
+    Total_Value = Total_Value,
+    Data_Source = Data_Source
+  ) %>%
+  ungroup()
+
+# Set "Data_Source": anything < 2020 is "Historic", anything >= 2020 is "Projected"
+combined_data <- combined_data %>%
+  mutate(
+    Data_Source = case_when(
+      Year < 2021 ~ "Historic",
+      Year >= 2021 ~ "Projected",
+      TRUE ~ Data_Source  # Preserve existing values if already set
+    )
+  )
+
+# Interpolate missing values for numeric variables
+combined_data <- combined_data %>%
+  group_by(Species) %>%
+  mutate(
+    Total_Weight_kg = na.approx(Total_Weight_kg, na.rm = FALSE, rule = 2),
+    Avg_Market_Price = na.approx(Avg_Market_Price, na.rm = FALSE, rule = 2),
+    Total_Value = na.approx(Total_Value, na.rm = FALSE, rule = 2)
+  ) %>%
+  ungroup()
 
 # Plot with continuous connection - Landings (Log Scale)
 ggplot(combined_data, aes(x = Year, y = Total_Weight_kg, color = Species, linetype = Data_Source)) +
@@ -2187,7 +2231,7 @@ ggplot(combined_data, aes(x = Year, y = Total_Weight_kg, color = Species, linety
   labs(title = "Total Landings Over Time (Historic & Projected)",
        x = "Year", 
        y = "Total Landings (kg)") +
-  scale_linetype_manual(values = c("Historic" = "solid", "Projected" = "dotted", "Interpolated" = "dotted")) +
+  scale_linetype_manual(values = c("Historic" = "solid", "Projected" = "dotted")) +
   theme_minimal()
 
 # Plot Market Price Over Time (Log Scale)
@@ -2216,7 +2260,8 @@ ggplot(combined_data, aes(x = Year, y = Total_Value, color = Species, linetype =
 
 ### Identify Comparable Economic Species to Diversify Stocks
 - Market Price
-- could be lots of landings available at moderate price
-- fewer landings at higher price
+- could be lots of new landings available at increased moderate price
+- fewer new landings at higher price
+- correlation of change in landings and market price?
 
 ### Evaluate Projected Net Economic Value over Time with Diversified Stock

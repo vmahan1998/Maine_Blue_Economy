@@ -541,6 +541,69 @@ colnames(exports_df)[2] <- "Year"
 head(exports_df)
 ```
 
+### Fish Biomass for Northeast
+```{r}
+# Load the data from CSV
+biomass <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/biomass-fish-stocks-region.csv",
+                    stringsAsFactors = FALSE, 
+                    check.names = FALSE, 
+                    skip = 0)  # Skip no rows initially
+```
+
+### Fishing Pressure for Northeast
+```{r}
+# Load the data from CSV
+fishing_pressure <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/fishing-pressure-by-region.csv",
+                    stringsAsFactors = FALSE, 
+                    check.names = FALSE, 
+                    skip = 0)  # Skip no rows initially
+```
+
+### US Fish and Seafood Production
+```{r}
+# Load the data from CSV
+production <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/fish-seafood-production.csv",
+                    stringsAsFactors = FALSE, 
+                    check.names = FALSE, 
+                    skip = 0)  # Skip no rows initially
+```
+
+### Consumer Price Index
+
+```{r}
+CPI <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Consumer_Price_Index.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+head(CPI)
+
+ggplot(CPI, aes(x = Year, y = Annual_CPI)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +  # Linear trend
+  labs(title = "Historical Consumer Price Index",
+       y = "Mean Sea Level (m)", x = "Year") +
+  theme_minimal()
+
+```
+
+### Consumer Price Index
+
+```{r}
+inflation <- read.csv("C:/Users/RDEL1VMM/Desktop/current projects/Maine_Blue_Economy/Available Data/Inflation_Rates.csv",
+                   stringsAsFactors = FALSE, 
+                   check.names = TRUE, 
+                   skip = 0)  # Load all rows initially
+
+head(inflation)
+
+ggplot(inflation, aes(x = Year, y = Annual_Inflation)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +  # Linear trend
+  labs(title = "Historical Consumer Price Index",
+       y = "Mean Sea Level (m)", x = "Year") +
+  theme_minimal()
+```
 
 ## Preprocessing
 
@@ -839,6 +902,41 @@ merged_data$Fishery_Exports <- ifelse(merged_data$Fishery_Exports == 0, NA, merg
 
 ```
 
+
+### Fish Biomass for Northeast
+```{r}
+merged_data <- merged_data %>%
+  left_join(biomass, by = "Year")  # Match based on Year column
+
+```
+
+### Fishing Pressure for Northeast
+```{r}
+merged_data <- merged_data %>%
+  left_join(fishing_pressure, by = "Year")  # Match based on Year column
+
+```
+
+### US Fish and Seafood Production
+```{r}
+merged_data <- merged_data %>%
+  left_join(production, by = "Year")  # Match based on Year column
+colnames(merged_data)[colnames(merged_data) == "Fish Seafood Tonnes"] <- "Fish_Seafood_Production"
+
+```
+
+### Inflation
+```{r}
+merged_data <- merged_data %>%
+  left_join(CPI, by = "Year")  # Match based on Year column
+```
+
+### CPI
+```{r}
+merged_data <- merged_data %>%
+  left_join(inflation, by = "Year")  # Match based on Year column
+```
+
 ### Interpolate Missing Values
 
 ```{r}
@@ -1135,22 +1233,6 @@ enso_scenarios %>%
 
 ```
 
-### Export Trends
-```{r}
-#export_model
-
-```
-
-### NAO Index
-```{r}
-# Generate a simple trend model for Annual_NAO
-nao_model <- lm(Annual_NAO ~ Year, data = interpolated_data)
-
-# Predict baseline NAO for future years
-future_annual_nao <- predict(nao_model, newdata = data.frame(Year = future_years))
-
-```
-
 ### Population Trends
 ```{r}
 # Generate a simple trend model for state_population
@@ -1165,6 +1247,43 @@ civilian_population_model <- lm(Civilian.Population..Millions. ~ Year, data = in
 
 # Predict baseline state_population for future years
 future_Civilian.Population..Millions. <- predict(civilian_population_model, newdata = data.frame(Year = future_years))
+```
+
+### Economic Trends
+```{r}
+# Generate a simple trend model for state_population
+inflation_model <- lm(Annual_Inflation ~ Year, data = interpolated_data)
+
+# Predict baseline state_population for future years
+future_inflation <- predict(inflation_model, newdata = data.frame(Year = future_years))
+
+# Generate a simple trend model for state_population
+capita_model <- lm(Per.Capita..US... ~ Year, data = interpolated_data)
+
+# Predict baseline state_population for future years
+future_capita <- predict(capita_model, newdata = data.frame(Year = future_years))
+
+# Generate a simple trend model for state_population
+annual_change_model <- lm(Annual...Change ~ Year, data = interpolated_data)
+
+# Predict baseline state_population for future years
+future_annual_change <- predict(annual_change_model, newdata = data.frame(Year = future_years))
+```
+
+### Fishing
+
+```{r}
+# Generate a simple trend model for state_population
+fishing_pressure_model <- lm(fishing_pressure_mean_region ~ Year, data = interpolated_data)
+
+# Predict baseline state_population for future years
+future_fishing_pressure <- predict(fishing_pressure_model, newdata = data.frame(Year = future_years))
+
+# Generate a simple trend model for state_population
+annual_Fish_Seafood_Production_model <- lm(Fish_Seafood_Production ~ Year, data = interpolated_data)
+
+# Predict baseline state_population for future years
+future_Fish_Seafood_Production <- predict(annual_Fish_Seafood_Production_model, newdata = data.frame(Year = future_years))
 ```
 
 ### All Scenarios
@@ -1182,9 +1301,14 @@ future_scenarios <- list(
   Moosehead_Annual_Temp = moosehead_baseline_temp,  # Baseline temperature for Moosehead
   Gardiner_Annual_Temp = gardiner_baseline_temp,  # Baseline temperature for Gardiner
   Augusta_Annual_Temp = augusta_baseline_temp,  # Baseline temperature for Augusta
-  Annual_NAO = future_annual_nao,  # NAO for low climate change
-  Civilian_Population_Millions = future_Civilian.Population..Millions.,  
-  State_Population = future_state_population 
+  Civilian.Population..Millions. = future_Civilian.Population..Millions.,  
+  State_Population = future_state_population,
+  Annual_Inflation = future_inflation
+#  GDP..Billions.of.US... = future_GDP,
+#  Per.Capita..US... = future_capita, 
+#  Annual...Change = future_annual_change,
+#  fishing_pressure_mean_region = future_fishing_pressure,
+#  Fish_Seafood_Production = future_Fish_Seafood_Production
 ),
 
 # Low Climate Change (SLR Low, Temp Low)
@@ -1196,10 +1320,14 @@ future_scenarios <- list(
   Moosehead_Annual_Temp = moosehead_low_temp,  # Low warming projection for Moosehead
   Gardiner_Annual_Temp = gardiner_low_temp,  # Low warming projection for Gardiner
   Augusta_Annual_Temp = augusta_low_temp,  # Low warming projection for Augusta
-  Annual_NAO = future_annual_nao,  # NAO for low climate change
-  Civilian_Population_Millions = future_Civilian.Population..Millions.,  
-  State_Population = future_state_population 
-),
+  Civilian.Population..Millions. = future_Civilian.Population..Millions.,  
+  State_Population = future_state_population,
+  Annual_Inflation = future_inflation#  GDP..Billions.of.US... = future_GDP,
+#  Per.Capita..US... = future_capita, 
+#  Annual...Change = future_annual_change,
+#  fishing_pressure_mean_region = future_fishing_pressure,
+#  Fish_Seafood_Production = future_Fish_Seafood_Production
+  ),
 
 # Moderate Climate Change (SLR Moderate, Temp Moderate)
 "Moderate_Climate" = data.frame(
@@ -1210,9 +1338,14 @@ future_scenarios <- list(
   Moosehead_Annual_Temp = moosehead_moderate_temp,  # Moderate warming projection for Moosehead
   Gardiner_Annual_Temp = gardiner_moderate_temp,  # Moderate warming projection for Gardiner
   Augusta_Annual_Temp = augusta_moderate_temp,  # Moderate warming projection for Augusta
-  Annual_NAO = future_annual_nao,  # NAO for low climate change
-  Civilian_Population_Millions = future_Civilian.Population..Millions.,  
-  State_Population = future_state_population 
+  Civilian.Population..Millions. = future_Civilian.Population..Millions.,  
+  State_Population = future_state_population,
+  Annual_Inflation = future_inflation
+#  GDP..Billions.of.US... = future_GDP,
+#  Per.Capita..US... = future_capita, 
+#  Annual...Change = future_annual_change,
+#  fishing_pressure_mean_region = future_fishing_pressure,
+#  Fish_Seafood_Production = future_Fish_Seafood_Production
 ),
 
 # Extreme Climate Change (SLR High, Temp High)
@@ -1224,9 +1357,14 @@ future_scenarios <- list(
   Moosehead_Annual_Temp = moosehead_high_temp,  # Extreme warming projection for Moosehead
   Gardiner_Annual_Temp = gardiner_high_temp,  # Extreme warming projection for Gardiner
   Augusta_Annual_Temp = augusta_high_temp,  # Extreme warming projection for Augusta
-  Annual_NAO = future_annual_nao,  # NAO for low climate change
-  Civilian_Population_Millions = future_Civilian.Population..Millions.,  
-  State_Population = future_state_population
+  Civilian.Population..Millions. = future_Civilian.Population..Millions.,  
+  State_Population = future_state_population,
+  Annual_Inflation = future_inflation
+#  GDP..Billions.of.US... = future_GDP,
+#  Per.Capita..US... = future_capita, 
+#  Annual...Change = future_annual_change,
+#  fishing_pressure_mean_region = future_fishing_pressure,
+#  Fish_Seafood_Production = future_Fish_Seafood_Production
 )
   
 )
@@ -1326,54 +1464,57 @@ for (species_name in species_list) {
 
   # 🔹 Train Landings Model
   landings_data <- df_species %>%
-    dplyr::select(Total_Weight_kg, Mean_Sea_Level_m, Portland_Annual_Precip, 
-                  Portland_Annual_Temp, Belfast_Annual_Precip, Belfast_Annual_Temp, 
+    dplyr::select(Total_Weight_kg, fishing_pressure_mean_region, State_Population, Mean_Sea_Level_m, Portland_Annual_Precip, Portland_Annual_Temp, Belfast_Annual_Precip, Belfast_Annual_Temp, 
                   Gardiner_Annual_Precip, Gardiner_Annual_Temp, Augusta_Annual_Precip,
-                  Augusta_Annual_Temp, Annual_NAO, State_Population)
+                  Augusta_Annual_Temp, Annual_NAO)
 
   set.seed(123)
-  trainIndex <- createDataPartition(landings_data$Total_Weight_kg, p = 0.8, list = FALSE)
+  trainIndex <- createDataPartition(landings_data$Total_Weight_kg, p = 0.7, list = FALSE)
   train_landings <- landings_data[trainIndex, ]
   test_landings <- landings_data[-trainIndex, ]
 
-  rf_landings <- randomForest(Total_Weight_kg ~ ., data = train_landings, ntree = 1000)
+  rf_landings <- randomForest(Total_Weight_kg ~ ., data = train_landings, ntree = 2000)
   
   # 🔹 Train Consumption Model
   consumption_data <- df_species %>%
-    dplyr::select(Total..Pounds., Total_Weight_kg, Civilian.Population..Millions., State_Population)
+    dplyr::select(Total..Pounds., Total_Weight_kg, Civilian.Population..Millions., State_Population, Fish_Seafood_Production)
   
-  trainIndex <- createDataPartition(consumption_data$Total..Pounds., p = 0.8, list = FALSE)
+  trainIndex <- createDataPartition(consumption_data$Total..Pounds., p = 0.7, list = FALSE)
   train_consumption <- consumption_data[trainIndex, ]
   test_consumption <- consumption_data[-trainIndex, ]
   
-  rf_consumption <- randomForest(Total..Pounds. ~ ., data = consumption_data, ntree = 1000)
+  rf_consumption <- randomForest(Total..Pounds. ~ ., data = consumption_data, ntree = 2000)
   
   # 🔹 Train Exports Model
   exports_data <- df_species %>%
-    dplyr::select(Fishery_Exports, Total_Weight_kg, Total..Pounds.)
+    dplyr::select(Fishery_Exports, Total_Weight_kg, Total..Pounds.,  Civilian.Population..Millions., Fish_Seafood_Production)
 
-  rf_exports <- randomForest(Fishery_Exports ~ ., data = exports_data, ntree = 1000)
+  rf_exports <- randomForest(Fishery_Exports ~ ., data = exports_data, ntree = 2000)
 
-  trainIndex <- createDataPartition(exports_data$Fishery_Exports, p = 0.8, list = FALSE)
+  trainIndex <- createDataPartition(exports_data$Fishery_Exports, p = 0.7, list = FALSE)
   train_exports <- exports_data[trainIndex, ]
   test_exports <- exports_data[-trainIndex, ]
   
   # 🔹 Train Market Value Model
   market_value_data <- df_species %>%
     dplyr::select(Avg_Market_Price, GDP..Billions.of.US..., Annual...Change, 
-                  Per.Capita..US..., Total_Weight_kg, Total..Pounds.)
+                  Per.Capita..US..., Total_Weight_kg, Total..Pounds., Civilian.Population..Millions., Annual_Inflation)
   
-  trainIndex <- createDataPartition(market_value_data$Avg_Market_Price, p = 0.8, list = FALSE)
+  trainIndex <- createDataPartition(market_value_data$Avg_Market_Price, p = 0.7, list = FALSE)
   train_market_value <- market_value_data[trainIndex, ]
   test_market_value <- market_value_data[-trainIndex, ]
   
-  rf_market_value <- randomForest(Avg_Market_Price ~ ., data = market_value_data, ntree = 1000)
+  rf_market_value <- randomForest(Avg_Market_Price ~ ., data = market_value_data, ntree = 2000)
 
   # 🔹 Train Blue Economy Model
   blue_economy_data <- df_species %>%
-    dplyr::select(Total_Value, Avg_Market_Price, Total_Weight_kg)
-
-  rf_blue_economy <- randomForest(Total_Value ~ ., data = blue_economy_data, ntree = 1000)
+    dplyr::select(Total_Value, Avg_Market_Price, Total_Weight_kg, Total..Pounds., Fishery_Exports, Mean_Sea_Level_m)
+  
+  trainIndex <- createDataPartition(blue_economy_data$Total_Value, p = 0.7, list = FALSE)
+  train_blue_economy <- blue_economy_data[trainIndex, ]
+  test_blue_economy <- blue_economy_data[-trainIndex, ]
+  
+  rf_blue_economy <- randomForest(Total_Value ~ ., data = blue_economy_data, ntree = 2000)
 
   # Evaluate Models
   
@@ -1450,7 +1591,8 @@ for (species_name in species_list) {
   evaluate_model(rf_consumption, train_consumption, test_consumption, "Total..Pounds.", "Consumption Model")
   evaluate_model(rf_exports, train_exports, test_exports, "Fishery_Exports", "Exports Model")
   evaluate_model(rf_market_value, train_market_value, test_market_value, "Avg_Market_Price", "Market Value Model")
-  
+  evaluate_model(rf_blue_economy, train_blue_economy, test_blue_economy, "Total_Value", "Blue Economy Model")
+
   # 🔹 Iterate Through Climate & Population Scenarios
   scenario_results <- list()
 
@@ -1646,8 +1788,7 @@ aggregated_results_by_scenario <- combined_results %>%
   group_by(Year, Scenario) %>%
   summarise(
     Mean_Exports = mean(Predicted_Exports, na.rm = TRUE),
-    Mean_Consumption = mean(Predicted_Consumption, na.rm = TRUE)
-  ) %>%
+    Mean_Consumption = mean(Predicted_Consumption, na.rm = TRUE)) %>%
   ungroup()
 
 # Save scenario-specific aggregated results
@@ -2007,4 +2148,75 @@ ggsave(bottom_10_plot_file, plot = bottom_10_plot, width = 10, height = 6)
 cat("Saved bottom 10 least accurate species plot:", bottom_10_plot_file, "\n")
 
 ```
+## Evaluate Results
 
+### Relative Conditions: Assess Current Economic Trends using Most Popularly Fished Species
+```{r}
+# Subset Results
+colnames(interpolated_data)[colnames(interpolated_data) == "species"] <- "Species"
+
+# Define the species list of interest
+known_top_species <- c("Lobster American", "Menhaden Atlantic", "Clam Soft", "Elver", "Seaweed Unc", "Scallop Sea", "Alewife", "Oysters", "Pollock", "Flounder Yellowtail", 
+                       "Haddock", "Flounder Winter", "Mussel Blue Sea")
+
+selected_species_forecast <- master_results_df %>%
+  filter(Species %in% known_top_species, Scenario == "Baseline")
+
+# Prepare Historic Data
+historic_data <- interpolated_data %>%
+  filter(Species %in% known_top_species) %>%
+  dplyr::select(Year, Species, Total_Weight_kg, Avg_Market_Price, Total_Value) %>%
+  mutate(Data_Source = "Historic")
+
+# Rename columns for merging
+model_data <- selected_species_forecast %>%
+  dplyr::select(Year, Species, Predicted_Landings, Predicted_Market_Value, Predicted_Blue_Economy_Value) %>%
+  rename(Total_Weight_kg = Predicted_Landings,
+         Avg_Market_Price = Predicted_Market_Value,
+         Total_Value = Predicted_Blue_Economy_Value) %>%
+  mutate(Data_Source = "Projected")
+
+# Combine datasets without gaps
+combined_data <- bind_rows(historic_data, model_data) %>%
+  arrange(Species, Year)
+
+# Plot with continuous connection - Landings (Log Scale)
+ggplot(combined_data, aes(x = Year, y = Total_Weight_kg, color = Species, linetype = Data_Source)) +
+  geom_line(size = 1.2) +
+  geom_vline(xintercept = 2020, linetype = "dashed", color = "grey", size = 1.0) +
+  labs(title = "Total Landings Over Time (Historic & Projected)",
+       x = "Year", 
+       y = "Total Landings (kg)") +
+  scale_linetype_manual(values = c("Historic" = "solid", "Projected" = "dotted", "Interpolated" = "dotted")) +
+  theme_minimal()
+
+# Plot Market Price Over Time (Log Scale)
+ggplot(combined_data, aes(x = Year, y = Avg_Market_Price, color = Species, linetype = Data_Source)) +
+  geom_line(size = 1.2) +
+  geom_vline(xintercept = 2020, linetype = "dashed", color = "grey", size = 1.0) +
+  labs(title = "Market Price Over Time (Historic & Projected)",
+       x = "Year", 
+       y = "Market Price ($/kg") +
+  scale_linetype_manual(values = c("Historic" = "solid", "Projected" = "dotted")) +
+  theme_minimal()
+
+# Plot Total Economic Value Over Time (Log Scale)
+ggplot(combined_data, aes(x = Year, y = Total_Value, color = Species, linetype = Data_Source)) +
+  geom_line(size = 1.2) +
+  geom_vline(xintercept = 2020, linetype = "dashed", color = "grey", size = 1.0) +
+  labs(title = "Total Economic Value Over Time (Historic & Projected)",
+       x = "Year", 
+       y = "Total Value ($)") +
+  scale_linetype_manual(values = c("Historic" = "solid", "Projected" = "dotted")) +
+  theme_minimal()
+
+```
+
+### Evaluate Change in Net Economic Value over Time
+
+### Identify Comparable Economic Species to Diversify Stocks
+- Market Price
+- could be lots of landings available at moderate price
+- fewer landings at higher price
+
+### Evaluate Projected Net Economic Value over Time with Diversified Stock

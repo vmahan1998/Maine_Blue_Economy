@@ -1,0 +1,33 @@
+{
+  "chart": {
+    "title": "Fishing intensity by region",
+    "subtitle": "Fishing intensity measures the extent to which a stock is being exploited. Here, it's measured as current fishing intensity divided by the intensity at the [maximum sustainable yield](#dod:msy). A value of one is the optimal level to maximize fish catch without causing fish population. Greater than one suggests overfishing.",
+    "citation": "RAM Legacy Database; Hilborn,et al. (2020). Effective fisheries management instrumental in improving fish stock status.",
+    "originalChartUrl": "https://ourworldindata.org/grapher/fishing-pressure-by-region?country=~US+Northeast+Coast&v=1&csvType=filtered&useColumnShortNames=false",
+    "selection": [
+      "Atlantic Ocean tunas",
+      "South America",
+      "Pacific Ocean tunas",
+      "Japan",
+      "Australia",
+      "US Alaska"
+    ]
+  },
+  "columns": {
+    "fishing_pressure_mean_region": {
+      "titleShort": "Fishing pressure",
+      "titleLong": "Fishing pressure",
+      "unit": "",
+      "timespan": "",
+      "type": "Numeric",
+      "owidVariableId": 176074,
+      "citationShort": " – processed by Our World in Data",
+      "citationLong": " – processed by Our World in Data. “Fishing pressure” [dataset]. RAM Legacy Database; Hilborn,et al. (2020). Effective fisheries management instrumental in improving fish stock status. [original data].",
+      "fullMetadata": "https://api.ourworldindata.org/v1/indicators/176074.metadata.json"
+    }
+  },
+  "dateDownloaded": "2025-03-14",
+  "activeFilters": {
+    "country": "~US Northeast Coast"
+  }
+}

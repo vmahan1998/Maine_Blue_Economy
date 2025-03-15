@@ -1,0 +1,48 @@
+{
+  "chart": {
+    "title": "Status of the world's fish stocks",
+    "subtitle": "[Fish stocks](#dod:fish-stock) become overexploited when fish are caught at a rate higher than the population can support, and the ability of the stock to produce its [Maximum Sustainable Yield (MSY)](#dod:msy) is jeopardized.",
+    "note": "Only data on assessed fish stocks are included here; many fish stocks across Africa, Asia, and South America have not been assessed.",
+    "citation": "Food and Agriculture Organization of the United Nations (2023)",
+    "originalChartUrl": "https://ourworldindata.org/grapher/fish-stocks-within-sustainable-levels?v=1&csvType=full&useColumnShortNames=false",
+    "selection": [
+      "World"
+    ]
+  },
+  "columns": {
+    "Percentage of fish stocks within biologically sustainable levels": {
+      "titleShort": "Biologically sustainable",
+      "titleLong": "Biologically sustainable",
+      "descriptionShort": "Fish stock are subpopulations of a particular species of fish which have common parameters such as location, growth and mortality which define their population dynamics. Fish stocks are within biologically sustainable levels when fish catch does not exceed the maximum sustainable yield (MSY) - the rate at which fish populations can regenerate.\n",
+      "shortUnit": "%",
+      "unit": "%",
+      "timespan": "1974-2019",
+      "type": "Numeric",
+      "owidVariableId": 848518,
+      "shortName": "sustainable_fish",
+      "lastUpdated": "2024-03-14",
+      "nextUpdate": "2025-04-14",
+      "citationShort": "Food and Agriculture Organization of the United Nations (2023) – with major processing by Our World in Data",
+      "citationLong": "Food and Agriculture Organization of the United Nations (2023) – with major processing by Our World in Data. “Biologically sustainable – FAO” [dataset]. Food and Agriculture Organization of the United Nations, “SDG Indicators: SDG Indicators” [original data].",
+      "fullMetadata": "https://api.ourworldindata.org/v1/indicators/848518.metadata.json"
+    },
+    "Percentage of overexploited fish stocks": {
+      "titleShort": "Overexploited",
+      "titleLong": "Overexploited",
+      "descriptionShort": "Fish stock are subpopulations of a particular species of fish which have common parameters such as location, growth and mortality which define their population dynamics. Fish stocks are overexploited when fish catch exceeds the maximum sustainable yield (MSY) - the rate at which fish populations can regenerate.\n",
+      "shortUnit": "%",
+      "unit": "%",
+      "timespan": "1974-2019",
+      "type": "Numeric",
+      "owidVariableId": 848519,
+      "shortName": "overexploited_fish",
+      "lastUpdated": "2024-03-14",
+      "nextUpdate": "2025-04-14",
+      "citationShort": "Food and Agriculture Organization of the United Nations (2023) – with major processing by Our World in Data",
+      "citationLong": "Food and Agriculture Organization of the United Nations (2023) – with major processing by Our World in Data. “Overexploited – FAO” [dataset]. Food and Agriculture Organization of the United Nations, “SDG Indicators: SDG Indicators” [original data].",
+      "fullMetadata": "https://api.ourworldindata.org/v1/indicators/848519.metadata.json"
+    }
+  },
+  "dateDownloaded": "2025-03-14",
+  "activeFilters": {}
+}
